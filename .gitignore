@@ -22,7 +22,6 @@ Plugins/Developer/RiderLink/*
 Configs/*
 
 # Ignore all non-Starter Project mods
-Mods/*
 Mods/**/Metadata/Crypto.json
 !Mods/Alpakit/
 !Mods/AccessTransformers/
