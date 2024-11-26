@@ -74,8 +74,8 @@ public class TestMod : ModuleRules
 		});
 		
 		PrivateDependencyModuleNames.AddRange(new string[] {
-			// ... add private dependencies that you statically link with here ...	
-		});
+			"RHI", "RenderCore"
+        });
 		
 		DynamicallyLoadedModuleNames.AddRange(new string[] {
 			// ... add any modules that your module loads dynamically here ...
