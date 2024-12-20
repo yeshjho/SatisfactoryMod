@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "FGBuildable.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "MyGameInstanceSubsystem.generated.h"
 
@@ -22,10 +23,15 @@ public:
     //virtual void Deinitialize() override;
 
 
-private:
-    UPROPERTY()
+protected:
+    UPROPERTY(EditAnywhere)
     TObjectPtr<UCanvasRenderTarget2D> CanvasRenderTarget;
 
-    UPROPERTY()
+    UPROPERTY(EditAnywhere)
     TObjectPtr<UTexture> RenderTexture;
+
+    UPROPERTY(EditAnywhere)
+    TSubclassOf<AFGBuildable> BuildableClass;
+
+    bool ShouldDraw = true;
 };
