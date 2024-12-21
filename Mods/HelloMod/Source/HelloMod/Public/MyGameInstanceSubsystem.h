@@ -3,10 +3,13 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "UE5Coro.h"
 #include "FGBuildable.h"
+#include "Kismet/KismetRenderingLibrary.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "MyGameInstanceSubsystem.generated.h"
 
+class AFGLightweightBuildableSubsystem;
 class UCanvasRenderTarget2D;
 /**
  * 
@@ -23,6 +26,10 @@ public:
     //virtual void Deinitialize() override;
 
 
+private:
+    UE5Coro::TCoroutine<> DoWork(AFGLightweightBuildableSubsystem* inst, FForceLatentCoroutine = {});
+
+
 protected:
     UPROPERTY(EditAnywhere)
     TObjectPtr<UCanvasRenderTarget2D> CanvasRenderTarget;
@@ -31,7 +38,13 @@ protected:
     TObjectPtr<UTexture> RenderTexture;
 
     UPROPERTY(EditAnywhere)
+    TObjectPtr<UTexture> RenderTexture2;
+
+    UPROPERTY(EditAnywhere)
     TSubclassOf<AFGBuildable> BuildableClass;
 
-    bool ShouldDraw = true;
+    bool ShouldDraw = false;
+
+    FDrawToRenderTargetContext DrawContext;
+    bool IsDrawingFinished = false;
 };
