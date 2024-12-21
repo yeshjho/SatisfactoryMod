@@ -27,10 +27,12 @@ UMyGameInstanceSubsystem::UMyGameInstanceSubsystem()
 
 UE5Coro::TCoroutine<> UMyGameInstanceSubsystem::DoWork(AFGLightweightBuildableSubsystem* inst, FForceLatentCoroutine)
 {
-	constexpr int renderTextureSize = 2048;
+	constexpr int renderTextureSize = 4096;
 
 	constexpr float originUV[] = { 0.4329333333333333333333333333f, 0.5f };
-	constexpr float mapWorldSize[] = { 750'000, 750'000 };
+	constexpr float mapWorldSize = 750'000;
+
+    constexpr float pixelPerMeter = renderTextureSize / mapWorldSize;
 
 
 	UKismetRenderingLibrary::ClearRenderTarget2D(this, CanvasRenderTarget, { 0, 0, 0, 0 });
@@ -48,13 +50,13 @@ UE5Coro::TCoroutine<> UMyGameInstanceSubsystem::DoWork(AFGLightweightBuildableSu
 			FVector loc = data.Transform.GetLocation();
 			FRotator rot = data.Transform.GetRotation().Rotator();
 
-			FVector2D ScreenPosition = FVector2D(originUV[0] + loc.X / mapWorldSize[0], originUV[1] + loc.Y / mapWorldSize[1]) * renderTextureSize;
+			FVector2D ScreenPosition = FVector2D(originUV[0] + loc.X / mapWorldSize, originUV[1] + loc.Y / mapWorldSize) * renderTextureSize;
 			float Rotation = rot.Yaw;
-			FCanvasTileItem TileItem(ScreenPosition, RenderTexture->GetResource(), { 50, 50 }, { 0, 0 }, { 1, 1 }, FLinearColor::White);
+			FCanvasTileItem TileItem(ScreenPosition, RenderTexture->GetResource(), { 800 * pixelPerMeter, 800 * pixelPerMeter }, { 0, 0 }, { 1, 1 }, FLinearColor::White);
 			TileItem.Rotation = FRotator(0, Rotation, 0);
 			TileItem.PivotPoint = { 0.5, 0.5 };
 			TileItem.BlendMode = FCanvas::BlendToSimpleElementBlend(EBlendMode::BLEND_Translucent);
-			TileItem.Z = loc.Z;
+			//TileItem.Z = loc.Z;
 			canvas->DrawItem(TileItem);
 
 			co_await Budget;

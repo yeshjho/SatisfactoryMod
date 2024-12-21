@@ -36,10 +36,10 @@ using namespace UE5Coro::Private;
 
 namespace
 {
-struct FAwaitingPromise
+struct FSemaphoreAwaitingPromise
 {
 	FPromise* Promise;
-	FAwaitingPromise* Next;
+	FSemaphoreAwaitingPromise* Next;
 };
 }
 
@@ -77,8 +77,8 @@ void FAwaitableSemaphore::TryResumeAll()
 	checkf(!Lock.try_lock(), TEXT("Internal error: resuming without lock held"));
 	while (Awaiters && Count > 0)
 	{
-		auto* Node = static_cast<FAwaitingPromise*>(std::exchange(
-			Awaiters, static_cast<FAwaitingPromise*>(Awaiters)->Next));
+		auto* Node = static_cast<FSemaphoreAwaitingPromise*>(std::exchange(
+			Awaiters, static_cast<FSemaphoreAwaitingPromise*>(Awaiters)->Next));
 		verifyf(--Count >= 0, TEXT("Internal error: semaphore went negative"));
 		Lock.unlock();
 		Node->Promise->Resume();
@@ -106,7 +106,7 @@ void FSemaphoreAwaiter::Suspend(FPromise& Promise)
 {
 	checkf(!Semaphore.Lock.try_lock(),
 	       TEXT("Internal error: suspension without lock"));
-	Semaphore.Awaiters = new FAwaitingPromise(
-		&Promise, static_cast<FAwaitingPromise*>(Semaphore.Awaiters));
+	Semaphore.Awaiters = new FSemaphoreAwaitingPromise(
+		&Promise, static_cast<FSemaphoreAwaitingPromise*>(Semaphore.Awaiters));
 	Semaphore.Lock.unlock();
 }

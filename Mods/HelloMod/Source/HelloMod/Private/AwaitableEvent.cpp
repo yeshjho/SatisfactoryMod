@@ -36,10 +36,10 @@ using namespace UE5Coro::Private;
 
 namespace
 {
-struct FAwaitingPromise
+struct FEventAwaitingPromise
 {
 	FPromise* Promise;
-	FAwaitingPromise* Next;
+	FEventAwaitingPromise* Next;
 };
 }
 
@@ -95,8 +95,8 @@ void FAwaitableEvent::ResumeOne()
 {
 	checkf(!Lock.try_lock(), TEXT("Internal error: resuming without lock"));
 	checkf(Awaiters, TEXT("Internal error: attempting to resume nothing"));
-	auto* Node = static_cast<FAwaitingPromise*>(std::exchange(Awaiters,
-		static_cast<FAwaitingPromise*>(Awaiters)->Next));
+	auto* Node = static_cast<FEventAwaitingPromise*>(std::exchange(Awaiters,
+		static_cast<FEventAwaitingPromise*>(Awaiters)->Next));
 	Lock.unlock(); // The coroutine might want the lock
 
 	auto* Promise = Node->Promise;
@@ -110,7 +110,7 @@ void FAwaitableEvent::TryResumeAll()
 
 	// Start a new awaiter list to make sure everything active at this point
 	// gets resumed eventually, even if the event is reset
-	auto* Node = static_cast<FAwaitingPromise*>(std::exchange(Awaiters, nullptr));
+	auto* Node = static_cast<FEventAwaitingPromise*>(std::exchange(Awaiters, nullptr));
 	Lock.unlock();
 
 	while (Node)
@@ -140,7 +140,7 @@ void FEventAwaiter::Suspend(FPromise& Promise)
 	checkf(!Event.Lock.try_lock(),
 	       TEXT("Internal error: suspension without lock"));
 	checkf(!Event.bActive, TEXT("Internal error: suspending with active event"));
-	Event.Awaiters = new FAwaitingPromise(
-		&Promise, static_cast<FAwaitingPromise*>(Event.Awaiters));
+	Event.Awaiters = new FEventAwaitingPromise(
+		&Promise, static_cast<FEventAwaitingPromise*>(Event.Awaiters));
 	Event.Lock.unlock();
 }
