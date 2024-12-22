@@ -55,6 +55,9 @@ protected:
 	TMap<TSoftClassPtr<AFGBuildable>, FVector> BuildableSizeMap;
 
 	UPROPERTY(EditDefaultsOnly)
+	TMap<TSoftClassPtr<AFGBuildable>, FRotator> BuildableExtraRotationMap;
+
+	UPROPERTY(EditDefaultsOnly)
 	TObjectPtr<UCanvasRenderTarget2D> RenderTarget;
 
 	bool ShouldInitialize = false;

@@ -320,8 +320,8 @@ UE5Coro::TCoroutine<> UActualMapGameInstanceModule::RedrawMapCoroutine(
 
 	for (const auto& [BuildableClass, Transform, _] : CurrentBuildingData)
 	{
-		const TSoftObjectPtr<UTexture2D> Texture = BuildableToIconMap.FindRef(BuildableClass.Get());
-		if (Texture.IsNull())
+		const TSoftObjectPtr<UTexture2D>* Texture = BuildableToIconMap.Find(BuildableClass.Get());
+		if (!Texture || Texture->IsNull())
 		{
 			continue;
 		}
@@ -341,10 +341,10 @@ UE5Coro::TCoroutine<> UActualMapGameInstanceModule::RedrawMapCoroutine(
 			continue;
 		}
 
-		const UTexture2D* LoadedTexture = Texture.Get();
+		const UTexture2D* LoadedTexture = Texture->Get();
 		if (!LoadedTexture)
 		{
-			LoadedTexture = co_await UE5Coro::Latent::AsyncLoadObject(Texture);
+			LoadedTexture = co_await UE5Coro::Latent::AsyncLoadObject(*Texture);
 		}
 
 		const FVector2D ScreenPosition = world_position_to_screen_position(Transform.GetLocation(), BuildableSize);
@@ -356,9 +356,16 @@ UE5Coro::TCoroutine<> UActualMapGameInstanceModule::RedrawMapCoroutine(
 			{ 1, 1 },
 			FLinearColor::White
 		};
+
 		TileItem.Rotation = Transform.GetRotation().Rotator();
 		TileItem.PivotPoint = { 0.5, 0.5 };
 		TileItem.BlendMode = FCanvas::BlendToSimpleElementBlend(EBlendMode::BLEND_Translucent);
+
+		if (const FRotator* Extra = BuildableExtraRotationMap.Find(BuildableClass.Get()))
+        {
+            TileItem.Rotation += *Extra;
+        }
+
 		Canvas->DrawItem(TileItem);
 
 		co_await Budget;
