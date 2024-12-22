@@ -40,9 +40,9 @@ public:
 	virtual void DispatchLifecycleEvent(ELifecyclePhase Phase) override;
 
 private:
-	UE5Coro::TCoroutine<> InitialBuildableGather(AFGLightweightBuildableSubsystem* Instance, FForceLatentCoroutine = {});
+	UE5Coro::TCoroutine<> InitialBuildableGather(TMap<UObject*, int32> Factories, TMap<TSubclassOf<AFGBuildable>, TArray<FRuntimeBuildableInstanceData>> Buildings, FForceLatentCoroutine = {});
     void RedrawMap();
-	UE5Coro::TCoroutine<> RedrawMapCoroutine(FForceLatentCoroutine = {});
+	UE5Coro::TCoroutine<> RedrawMapCoroutine(TArray<FBuildingData> AddedBuildings, TArray<FBuildingData> RemovedBuildings, FForceLatentCoroutine = {});
 
 	void OnCoroutineFinishedOrCancelled();
 

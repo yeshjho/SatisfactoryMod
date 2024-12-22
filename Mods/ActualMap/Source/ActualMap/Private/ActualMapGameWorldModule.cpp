@@ -75,7 +75,8 @@ void UActualMapGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase)
 
 			ShouldInitialize = false;
             IsInitializing = true;
-			Coroutine = InitialBuildableGather(Instance);
+
+			Coroutine = InitialBuildableGather(UFGSaveSession::mObjectToSerailizedVersion, Instance->mBuildableClassToInstanceArray);
 		};
 
 
@@ -149,7 +150,7 @@ void UActualMapGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase)
 			}
 
 			const int32 Index = Instance->GetRuntimeDataIndexForBuildable(Buildable);
-			FRuntimeBuildableInstanceData* Data = Instance->GetRuntimeDataForBuildableClassAndIndex(Buildable->GetClass(), Index);
+			const FRuntimeBuildableInstanceData* Data = Instance->GetRuntimeDataForBuildableClassAndIndex(Buildable->GetClass(), Index);
 
             PendingRemoveBuildingData.Add(
                 {
@@ -197,13 +198,11 @@ void UActualMapGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase)
 }
 
 
-UE5Coro::TCoroutine<> UActualMapGameInstanceModule::InitialBuildableGather(AFGLightweightBuildableSubsystem* Instance, FForceLatentCoroutine)
+// Factories/Buildings: Intentional copies
+UE5Coro::TCoroutine<> UActualMapGameInstanceModule::InitialBuildableGather(
+	TMap<UObject*, int32> Factories, TMap<TSubclassOf<AFGBuildable>, TArray<FRuntimeBuildableInstanceData>> Buildings, FForceLatentCoroutine)
 {
-	TMap<UObject*, int32> Factories = UFGSaveSession::mObjectToSerailizedVersion;
-	TMap<TSubclassOf<AFGBuildable>, TArray<FRuntimeBuildableInstanceData>> Buildings = Instance->mBuildableClassToInstanceArray;
-
 	CurrentBuildingData.Empty(Factories.Num() + Buildings.Num());
-
 
 	UE5Coro::Latent::FTickTimeBudget Budget = UE5Coro::Latent::FTickTimeBudget::Milliseconds(1);
 
@@ -247,7 +246,9 @@ UE5Coro::TCoroutine<> UActualMapGameInstanceModule::InitialBuildableGather(AFGLi
 
 	IsInitializing = false;
 	IsPendingRedraw = false;
-	Coroutine = RedrawMapCoroutine();
+	Coroutine = RedrawMapCoroutine(PendingAddBuildingData, PendingRemoveBuildingData);
+	PendingAddBuildingData.Empty();
+	PendingRemoveBuildingData.Empty();
 }
 
 
@@ -265,12 +266,17 @@ void UActualMapGameInstanceModule::RedrawMap()
 	else
 	{
         UE_LOG(LogTemp, Warning, TEXT("ActualMap: RedrawMap is not running. Starting a new one."));
-		Coroutine = RedrawMapCoroutine();
+
+		Coroutine = RedrawMapCoroutine(PendingAddBuildingData, PendingRemoveBuildingData);
+		PendingAddBuildingData.Empty();
+		PendingRemoveBuildingData.Empty();
 	}
 }
 
 
-UE5Coro::TCoroutine<> UActualMapGameInstanceModule::RedrawMapCoroutine(FForceLatentCoroutine)
+// AddedBuildings/RemovedBuildings: Intentional copies
+UE5Coro::TCoroutine<> UActualMapGameInstanceModule::RedrawMapCoroutine(
+	TArray<FBuildingData> AddedBuildings, TArray<FBuildingData> RemovedBuildings, FForceLatentCoroutine)
 {
 	ON_SCOPE_EXIT
 	{
@@ -279,31 +285,24 @@ UE5Coro::TCoroutine<> UActualMapGameInstanceModule::RedrawMapCoroutine(FForceLat
 
 	RenderContext = {};
 
-	TArray<FBuildingData> PendingAddBuildingDataCopy = PendingAddBuildingData;
-	PendingAddBuildingData.Empty();
-
-    TArray<FBuildingData> PendingRemoveBuildingDataCopy = PendingRemoveBuildingData;
-    PendingRemoveBuildingData.Empty();
-
-
 	UE5Coro::Latent::FTickTimeBudget Budget = UE5Coro::Latent::FTickTimeBudget::Milliseconds(1);
 
-	for (FBuildingData& NewBuildingData : PendingAddBuildingDataCopy)
+	for (FBuildingData& AddedBuildingData : AddedBuildings)
 	{
-		const int32 Pos = Algo::LowerBound(CurrentBuildingData, NewBuildingData);
-		CurrentBuildingData.Insert(std::move(NewBuildingData), Pos);
+		const int32 Pos = Algo::LowerBound(CurrentBuildingData, AddedBuildingData);
+		CurrentBuildingData.Insert(std::move(AddedBuildingData), Pos);
 
 		co_await Budget;
 	}
 
-    for (const FBuildingData& RemoveBuildingData : PendingRemoveBuildingDataCopy)
+    for (const FBuildingData& RemovedBuildingData : RemovedBuildings)
     {
-        const int32 Start = Algo::LowerBound(CurrentBuildingData, RemoveBuildingData);
-        const int32 End = Algo::UpperBound(CurrentBuildingData, RemoveBuildingData);
+        const int32 Start = Algo::LowerBound(CurrentBuildingData, RemovedBuildingData);
+        const int32 End = Algo::UpperBound(CurrentBuildingData, RemovedBuildingData);
 
         for (int32 i = Start; i < End; ++i)
         {
-            if (CurrentBuildingData[i] == RemoveBuildingData)
+            if (CurrentBuildingData[i] == RemovedBuildingData)
             {
                 CurrentBuildingData.RemoveAt(i);
                 break;
@@ -383,6 +382,8 @@ void UActualMapGameInstanceModule::OnCoroutineFinishedOrCancelled()
 
 	// The coroutine is also on the game thread, so I think no data race here.
     IsPendingRedraw = false;
-	Coroutine = RedrawMapCoroutine();
+	Coroutine = RedrawMapCoroutine(PendingAddBuildingData, PendingRemoveBuildingData);
+	PendingAddBuildingData.Empty();
+	PendingRemoveBuildingData.Empty();
     UE_LOG(LogTemp, Warning, TEXT("ActualMap: RedrawMapCoroutine restarted"));
 }
