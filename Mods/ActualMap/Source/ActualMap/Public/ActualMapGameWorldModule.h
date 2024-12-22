@@ -19,7 +19,12 @@ class AFGLightweightBuildableSubsystem;
 
 struct FBuildingData
 {
-	TMap<TSubclassOf<AFGBuildable>, TArray<FRuntimeBuildableInstanceData>> LightweightBuildables;
+    TSubclassOf<AFGBuildable> BuildableClass;
+	FTransform Transform;
+	FFactoryCustomizationData CustomizationData;
+
+	bool operator==(const FBuildingData& Other) const noexcept;
+	auto operator<=>(const FBuildingData& Other) const noexcept;
 };
 
 
@@ -35,6 +40,8 @@ public:
 	virtual void DispatchLifecycleEvent(ELifecyclePhase Phase) override;
 
 private:
+	//UE5Coro::TCoroutine<> InitialBuildableGatherCoroutine(AFGLightweightBuildableSubsystem* Instance, FForceLatentCoroutine = {});
+	void InitialBuildableGather(AFGLightweightBuildableSubsystem* Instance, FForceLatentCoroutine = {});
     void RedrawMap(AFGLightweightBuildableSubsystem* Instance);
 	UE5Coro::TCoroutine<> RedrawMapCoroutine(FForceLatentCoroutine = {});
 
@@ -49,8 +56,10 @@ protected:
 	TObjectPtr<UCanvasRenderTarget2D> RenderTarget;
 
 	UE5Coro::TCoroutine<> Coroutine = UE5Coro::TCoroutine<>::CompletedCoroutine;
-    FDrawToRenderTargetContext RenderContext;
-	FBuildingData CurrentBuildingData;
+	FDrawToRenderTargetContext RenderContext;
+	TArray<FBuildingData> CurrentBuildingData;
+
 	bool IsPendingRedraw = false;
-	FBuildingData PendingBuildingData;
+	TArray<FBuildingData> PendingAddBuildingData;
+	TArray<FBuildingData> PendingRemoveBuildingData;
 };

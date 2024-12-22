@@ -34,6 +34,19 @@ FVector2D world_position_to_screen_position(const FVector& WorldPosition, float 
 }
 
 
+auto FBuildingData::operator<=>(const FBuildingData& Other) const noexcept
+{
+	return Transform.GetLocation().Z <=> Other.Transform.GetLocation().Z;
+}
+
+
+bool FBuildingData::operator==(const FBuildingData& Other) const noexcept
+{
+    return BuildableClass == Other.BuildableClass && Transform.Equals(Other.Transform, 0);
+    // Ignoring CustomizationData on purpose
+}
+
+
 void UActualMapGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase)
 {
 	Super::DispatchLifecycleEvent(Phase);
@@ -47,52 +60,130 @@ void UActualMapGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase)
 	const auto LambdaAfterLoadGame =
 		[this](bool ReturnValue, UFGSaveSession* Instance, const FString& SaveName)
 		{
-			//for (const auto [obj, ver] : UFGSaveSession::mObjectToSerailizedVersion)
-			//{
-			//	if (!obj->IsA<AFGBuildable>())
-			//	{
-			//		continue;
-			//	}
-			//}
-
+			InitialBuildableGather(AFGLightweightBuildableSubsystem::Get(Instance));
 			RedrawMap(AFGLightweightBuildableSubsystem::Get(Instance));
 		};
 
 
     const auto LambdaAfterAddFromBuildableInstanceData = 
-        [this](int32 ReturnValue, AFGLightweightBuildableSubsystem* Instance, TSubclassOf< class AFGBuildable > BuildableClass, 
+        [this](int32 ReturnValue, AFGLightweightBuildableSubsystem* Instance, TSubclassOf<AFGBuildable> BuildableClass, 
             FRuntimeBuildableInstanceData& BuildableInstanceData, bool FromSaveData = false, int32 SaveDataBuildableIndex = INDEX_NONE, 
             uint16 ConstructId = MAX_uint16, AActor* BuildEffectInstigator = nullptr, int32 BlueprintBuildEffectIndex = INDEX_NONE)
         {
-            if (!FromSaveData)
-            {
-				RedrawMap(Instance);
-            }
+			if (FromSaveData)
+			{
+				return;
+			}
+
+			PendingAddBuildingData.Add(
+				{
+					.BuildableClass = BuildableClass,
+					.Transform = BuildableInstanceData.Transform,
+					.CustomizationData = BuildableInstanceData.CustomizationData,
+				}
+			);
+        	RedrawMap(Instance);
         };
 
 
+	const auto LambdaAfterAddFromReplicatedData =
+		[this](AFGLightweightBuildableSubsystem* Instance, TSubclassOf<AFGBuildable> BuildableClass, TSubclassOf<UFGRecipe> BuiltWithRecipe, 
+			const FLightweightBuildableReplicationItem& ReplicationData, int32 MaxSize, 
+			AActor* BuildEffectInstigator, int32 BlueprintBuildIndex)
+		{
+			PendingAddBuildingData.Add(
+				{
+					.BuildableClass = BuildableClass,
+					.Transform = ReplicationData.Transform,
+					.CustomizationData = ReplicationData.CustomizationData,
+				}
+			);
+			RedrawMap(Instance);
+		};
+
+
+	const auto LambdaOnRemoveByBuildable = 
+		[this](auto& Scope, AFGLightweightBuildableSubsystem* Instance, AFGBuildable* Buildable)
+		{
+			const int32 Index = Instance->GetRuntimeDataIndexForBuildable(Buildable);
+			FRuntimeBuildableInstanceData* Data = Instance->GetRuntimeDataForBuildableClassAndIndex(Buildable->GetClass(), Index);
+
+            PendingRemoveBuildingData.Add(
+                {
+                    .BuildableClass = Buildable->GetClass(),
+                    .Transform = Data->Transform,
+                    .CustomizationData = Data->CustomizationData,
+                }
+            );
+            RedrawMap(Instance);
+		};
+
+	const auto l2
+		= [](AFGLightweightBuildableSubsystem* Instance, TSubclassOf<  AFGBuildable > buildableClass, int32)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("ActualMap: RemoveByInstanceIndex"));
+		};
+
+
 	SUBSCRIBE_UOBJECT_METHOD_AFTER(UFGSaveSession, LoadGame, LambdaAfterLoadGame);
-    SUBSCRIBE_UOBJECT_METHOD_AFTER(AFGLightweightBuildableSubsystem, AddFromBuildableInstanceData, LambdaAfterAddFromBuildableInstanceData);
+
+	SUBSCRIBE_UOBJECT_METHOD_AFTER(AFGLightweightBuildableSubsystem, AddFromBuildableInstanceData, LambdaAfterAddFromBuildableInstanceData);
+    SUBSCRIBE_UOBJECT_METHOD_AFTER(AFGLightweightBuildableSubsystem, AddFromReplicatedData, LambdaAfterAddFromReplicatedData);
+
+	SUBSCRIBE_UOBJECT_METHOD(AFGLightweightBuildableSubsystem, RemoveByBuildable, LambdaOnRemoveByBuildable);
+}
+
+
+void UActualMapGameInstanceModule::InitialBuildableGather(AFGLightweightBuildableSubsystem* Instance, FForceLatentCoroutine)
+{
+	CurrentBuildingData.Empty(UFGSaveSession::mObjectToSerailizedVersion.Num() + Instance->mBuildableClassToInstanceArray.Num());
+
+	for (const auto [Object, _] : UFGSaveSession::mObjectToSerailizedVersion)
+	{
+		if (!Object->IsA<AFGBuildable>())
+		{
+			continue;
+		}
+
+		const auto* Buildable = Cast<AFGBuildable>(Object);
+
+		FBuildingData NewBuildingData{
+			.BuildableClass = Buildable->GetClass(),
+			.Transform = Buildable->GetTransform(),
+		};
+
+		const int32 Pos = Algo::LowerBound(CurrentBuildingData, NewBuildingData);
+		CurrentBuildingData.Insert(std::move(NewBuildingData), Pos);
+	}
+
+	for (const auto& [Type, Arr] : Instance->mBuildableClassToInstanceArray)
+	{
+		for (const FRuntimeBuildableInstanceData& InstanceData : Arr)
+		{
+			FBuildingData NewBuildingData{
+				.BuildableClass = Type,
+				.Transform = InstanceData.Transform,
+				.CustomizationData = InstanceData.CustomizationData,
+			};
+
+			const int32 Pos = Algo::LowerBound(CurrentBuildingData, NewBuildingData);
+			CurrentBuildingData.Insert(std::move(NewBuildingData), Pos);
+		}
+	}
 }
 
 
 void UActualMapGameInstanceModule::RedrawMap(AFGLightweightBuildableSubsystem* Instance)
 {
-	if (!Instance)
-	{
-		UE_LOG(LogTemp, Error, TEXT("ActualMap: Instance is null"));
-		return;
-	}
-
 	if (!Coroutine.IsDone())
 	{
-        Coroutine.Cancel();
-        IsPendingRedraw = true;
-        PendingBuildingData.LightweightBuildables = Instance->mBuildableClassToInstanceArray;
+        UE_LOG(LogTemp, Warning, TEXT("RedrawMap is already running. Cancelling the previous one."));
+		Coroutine.Cancel();
+		IsPendingRedraw = true;
 	}
 	else
 	{
-        CurrentBuildingData.LightweightBuildables = Instance->mBuildableClassToInstanceArray;
+        UE_LOG(LogTemp, Warning, TEXT("RedrawMap is not running. Starting a new one."));
 		Coroutine = RedrawMapCoroutine();
 	}
 }
@@ -105,10 +196,39 @@ UE5Coro::TCoroutine<> UActualMapGameInstanceModule::RedrawMapCoroutine(FForceLat
         OnCoroutineFinishedOrCancelled();
 	};
 
-    // Copying the buildable data would have spent some time, so yielding here.
-	co_await UE5Coro::Latent::NextTick();
+	TArray<FBuildingData> PendingAddBuildingDataCopy = PendingAddBuildingData;
+	PendingAddBuildingData.Empty();
 
-	UE5Coro::Latent::FTickTimeBudget Budget = UE5Coro::Latent::FTickTimeBudget::Milliseconds(0.5);
+    TArray<FBuildingData> PendingRemoveBuildingDataCopy = PendingRemoveBuildingData;
+    PendingRemoveBuildingData.Empty();
+
+
+	UE5Coro::Latent::FTickTimeBudget Budget = UE5Coro::Latent::FTickTimeBudget::Milliseconds(1);
+
+	for (FBuildingData& NewBuildingData : PendingAddBuildingDataCopy)
+	{
+		const int32 Pos = Algo::LowerBound(CurrentBuildingData, NewBuildingData);
+		CurrentBuildingData.Insert(std::move(NewBuildingData), Pos);
+
+		co_await Budget;
+	}
+
+    for (const FBuildingData& RemoveBuildingData : PendingRemoveBuildingDataCopy)
+    {
+        const int32 Start = Algo::LowerBound(CurrentBuildingData, RemoveBuildingData);
+        const int32 End = Algo::UpperBound(CurrentBuildingData, RemoveBuildingData);
+
+        for (int32 i = Start; i < End; ++i)
+        {
+            if (CurrentBuildingData[i] == RemoveBuildingData)
+            {
+                CurrentBuildingData.RemoveAt(i);
+                break;
+            }
+        }
+
+        co_await Budget;
+    }
 
 	UKismetRenderingLibrary::ClearRenderTarget2D(this, RenderTarget, { 0, 0, 0, 0 });
 
@@ -116,13 +236,19 @@ UE5Coro::TCoroutine<> UActualMapGameInstanceModule::RedrawMapCoroutine(FForceLat
 	FVector2D Size;
 	UKismetRenderingLibrary::BeginDrawCanvasToRenderTarget(this, RenderTarget, Canvas, Size, RenderContext);
 
-	for (const auto& [Type, Arr] : CurrentBuildingData.LightweightBuildables)
+	for (const auto& [BuildableClass, Transform, _] : CurrentBuildingData)
 	{
+		const TSoftObjectPtr<UTexture2D> Texture = BuildableToIconMap.FindRef(BuildableClass.Get());
+		if (Texture.IsNull())
+		{
+			continue;
+		}
+
 		float Width = 0;
 		float Height = 0;
-		if (Type->IsChildOf(AFGBuildableFoundation::StaticClass()))
+		if (BuildableClass->IsChildOf(AFGBuildableFoundation::StaticClass()))
 		{
-			AFGBuildableFoundation* Foundation = Cast<AFGBuildableFoundation>(Type->ClassDefaultObject);
+			AFGBuildableFoundation* Foundation = Cast<AFGBuildableFoundation>(BuildableClass->ClassDefaultObject);
 			Width = Foundation->mWidth;
 			Height = Foundation->mDepth;
 		}
@@ -131,35 +257,31 @@ UE5Coro::TCoroutine<> UActualMapGameInstanceModule::RedrawMapCoroutine(FForceLat
 			continue;
 		}
 
-		const TSoftObjectPtr<UTexture2D> Texture = BuildableToIconMap.FindRef(Type.Get());
-		if (Texture.IsNull())
+		const UTexture2D* LoadedTexture = Texture.Get();
+		if (!LoadedTexture)
 		{
-			continue;
+			LoadedTexture = co_await UE5Coro::Latent::AsyncLoadObject(Texture);
 		}
-		const UTexture2D* LoadedTexture = co_await UE5Coro::Latent::AsyncLoadObject(Texture);
 
-		for (const FRuntimeBuildableInstanceData& InstanceData : Arr)
-		{
-			const auto& Scale = InstanceData.Transform.GetScale3D();
-            Width *= Scale.X;
-            Height *= Scale.Y;
+		const auto& Scale = Transform.GetScale3D();
+		Width *= Scale.X;
+		Height *= Scale.Y;
 
-			const FVector2D ScreenPosition = world_position_to_screen_position(InstanceData.Transform.GetLocation(), Width, Height);
-			FCanvasTileItem TileItem{
-				ScreenPosition,
-				LoadedTexture->GetResource(),
-				{ Width * PIXEL_PER_CENTIMETER[0], Height * PIXEL_PER_CENTIMETER[1] },
-				{ 0, 0 },
-				{ 1, 1 },
-				FLinearColor::White
-			};
-			TileItem.Rotation = InstanceData.Transform.GetRotation().Rotator();
-			TileItem.PivotPoint = { 0.5, 0.5 };
-			TileItem.BlendMode = FCanvas::BlendToSimpleElementBlend(EBlendMode::BLEND_Translucent);
-			Canvas->DrawItem(TileItem);
+		const FVector2D ScreenPosition = world_position_to_screen_position(Transform.GetLocation(), Width, Height);
+		FCanvasTileItem TileItem{
+			ScreenPosition,
+			LoadedTexture->GetResource(),
+			{ Width * PIXEL_PER_CENTIMETER[0], Height * PIXEL_PER_CENTIMETER[1] },
+			{ 0, 0 },
+			{ 1, 1 },
+			FLinearColor::White
+		};
+		TileItem.Rotation = Transform.GetRotation().Rotator();
+		TileItem.PivotPoint = { 0.5, 0.5 };
+		TileItem.BlendMode = FCanvas::BlendToSimpleElementBlend(EBlendMode::BLEND_Translucent);
+		Canvas->DrawItem(TileItem);
 
-			co_await Budget;
-		}
+		co_await Budget;
 	}
 }
 
@@ -175,6 +297,5 @@ void UActualMapGameInstanceModule::OnCoroutineFinishedOrCancelled()
 
 	// The coroutine is also on the game thread, so I think no data race here.
     IsPendingRedraw = false;
-    CurrentBuildingData = std::move(PendingBuildingData);
 	Coroutine = RedrawMapCoroutine();
 }
