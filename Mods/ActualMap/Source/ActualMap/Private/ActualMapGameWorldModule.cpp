@@ -74,9 +74,8 @@ void UActualMapGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase)
 			}
 
 			ShouldInitialize = false;
-			InitialBuildableGather(Instance);
-            UE_LOG(LogTemp, Warning, TEXT("ActualMap: InitialBuildableGather"));
-			RedrawMap();
+            IsInitializing = true;
+			Coroutine = InitialBuildableGather(Instance);
 		};
 
 
@@ -177,7 +176,7 @@ void UActualMapGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase)
 					.Transform = Buildable->GetTransform(),
 					.CustomizationData = Buildable->GetCustomizationData_Native(),
 				}
-				);
+			);
 			RedrawMap();
 		};
 
@@ -198,11 +197,17 @@ void UActualMapGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase)
 }
 
 
-void UActualMapGameInstanceModule::InitialBuildableGather(AFGLightweightBuildableSubsystem* Instance, FForceLatentCoroutine)
+UE5Coro::TCoroutine<> UActualMapGameInstanceModule::InitialBuildableGather(AFGLightweightBuildableSubsystem* Instance, FForceLatentCoroutine)
 {
-	CurrentBuildingData.Empty(UFGSaveSession::mObjectToSerailizedVersion.Num() + Instance->mBuildableClassToInstanceArray.Num());
+	TMap<UObject*, int32> Factories = UFGSaveSession::mObjectToSerailizedVersion;
+	TMap<TSubclassOf<AFGBuildable>, TArray<FRuntimeBuildableInstanceData>> Buildings = Instance->mBuildableClassToInstanceArray;
 
-	for (const auto [Object, _] : UFGSaveSession::mObjectToSerailizedVersion)
+	CurrentBuildingData.Empty(Factories.Num() + Buildings.Num());
+
+
+	UE5Coro::Latent::FTickTimeBudget Budget = UE5Coro::Latent::FTickTimeBudget::Milliseconds(1);
+
+	for (const auto [Object, _] : Factories)
 	{
 		if (!Object->IsA<AFGBuildable>())
 		{
@@ -219,9 +224,11 @@ void UActualMapGameInstanceModule::InitialBuildableGather(AFGLightweightBuildabl
 
 		const int32 Pos = Algo::LowerBound(CurrentBuildingData, NewBuildingData);
 		CurrentBuildingData.Insert(std::move(NewBuildingData), Pos);
+
+		co_await Budget;
 	}
 
-	for (const auto& [Type, Arr] : Instance->mBuildableClassToInstanceArray)
+	for (const auto& [Type, Arr] : Buildings)
 	{
 		for (const FRuntimeBuildableInstanceData& InstanceData : Arr)
 		{
@@ -233,8 +240,14 @@ void UActualMapGameInstanceModule::InitialBuildableGather(AFGLightweightBuildabl
 
 			const int32 Pos = Algo::LowerBound(CurrentBuildingData, NewBuildingData);
 			CurrentBuildingData.Insert(std::move(NewBuildingData), Pos);
+
+			co_await Budget;
 		}
 	}
+
+	IsInitializing = false;
+	IsPendingRedraw = false;
+	Coroutine = RedrawMapCoroutine();
 }
 
 
@@ -243,7 +256,10 @@ void UActualMapGameInstanceModule::RedrawMap()
 	if (!Coroutine.IsDone())
 	{
         UE_LOG(LogTemp, Warning, TEXT("ActualMap: RedrawMap is already running. Cancelling the previous one."));
-		Coroutine.Cancel();
+		if (!IsInitializing)
+		{
+			Coroutine.Cancel();
+		}
 		IsPendingRedraw = true;
 	}
 	else

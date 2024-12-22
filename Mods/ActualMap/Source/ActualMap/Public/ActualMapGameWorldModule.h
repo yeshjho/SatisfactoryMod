@@ -40,7 +40,7 @@ public:
 	virtual void DispatchLifecycleEvent(ELifecyclePhase Phase) override;
 
 private:
-	void InitialBuildableGather(AFGLightweightBuildableSubsystem* Instance, FForceLatentCoroutine = {});
+	UE5Coro::TCoroutine<> InitialBuildableGather(AFGLightweightBuildableSubsystem* Instance, FForceLatentCoroutine = {});
     void RedrawMap();
 	UE5Coro::TCoroutine<> RedrawMapCoroutine(FForceLatentCoroutine = {});
 
@@ -58,6 +58,7 @@ protected:
 	TObjectPtr<UCanvasRenderTarget2D> RenderTarget;
 
 	bool ShouldInitialize = false;
+	bool IsInitializing = false;
 
 	UE5Coro::TCoroutine<> Coroutine = UE5Coro::TCoroutine<>::CompletedCoroutine;
 	FDrawToRenderTargetContext RenderContext;
