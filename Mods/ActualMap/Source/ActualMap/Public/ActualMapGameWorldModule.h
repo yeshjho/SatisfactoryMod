@@ -40,9 +40,8 @@ public:
 	virtual void DispatchLifecycleEvent(ELifecyclePhase Phase) override;
 
 private:
-	//UE5Coro::TCoroutine<> InitialBuildableGatherCoroutine(AFGLightweightBuildableSubsystem* Instance, FForceLatentCoroutine = {});
 	void InitialBuildableGather(AFGLightweightBuildableSubsystem* Instance, FForceLatentCoroutine = {});
-    void RedrawMap(AFGLightweightBuildableSubsystem* Instance);
+    void RedrawMap();
 	UE5Coro::TCoroutine<> RedrawMapCoroutine(FForceLatentCoroutine = {});
 
 	void OnCoroutineFinishedOrCancelled();
@@ -53,7 +52,12 @@ protected:
     TMap<TSoftClassPtr<AFGBuildable>, TSoftObjectPtr<UTexture2D>> BuildableToIconMap;
 
 	UPROPERTY(EditDefaultsOnly)
+	TMap<TSoftClassPtr<AFGBuildable>, FVector> BuildableSizeMap;
+
+	UPROPERTY(EditDefaultsOnly)
 	TObjectPtr<UCanvasRenderTarget2D> RenderTarget;
+
+	bool ShouldInitialize = false;
 
 	UE5Coro::TCoroutine<> Coroutine = UE5Coro::TCoroutine<>::CompletedCoroutine;
 	FDrawToRenderTargetContext RenderContext;
