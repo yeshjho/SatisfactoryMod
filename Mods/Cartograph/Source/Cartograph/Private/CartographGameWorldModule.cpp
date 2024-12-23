@@ -67,21 +67,18 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 		[this](bool ReturnValue, UFGSaveSession* Instance, const FString& SaveName)
 		{
 			ShouldInitialize = true;
-		};
 
+			// Calling it at the same tick sometimes causes the coroutine to just disappear
+			GetWorld()->GetTimerManager().SetTimerForNextTick([this, Instance]()
+				{
+					ShouldInitialize = false;
+					IsInitializing = true;
 
-	const auto LambdaAfterRemoveStaleTemporaryBuildables =
-		[this](AFGLightweightBuildableSubsystem* Instance)
-		{
-			if (!ShouldInitialize)
-			{
-				return;
-			}
-
-			ShouldInitialize = false;
-            IsInitializing = true;
-
-			Coroutine = InitialBuildableGather(AFGBuildableSubsystem::Get(Instance)->GetAllBuildablesRef(), Instance->mBuildableClassToInstanceArray);
+					Coroutine = InitialBuildableGather(
+						AFGBuildableSubsystem::Get(Instance)->GetAllBuildablesRef(),
+                        AFGLightweightBuildableSubsystem::Get(Instance)->mBuildableClassToInstanceArray
+					);
+				});
 		};
 
 
@@ -197,7 +194,6 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 
 
 	SUBSCRIBE_UOBJECT_METHOD_AFTER(UFGSaveSession, LoadGame, LambdaAfterLoadGame);
-	SUBSCRIBE_UOBJECT_METHOD_AFTER(AFGLightweightBuildableSubsystem, RemoveStaleTemporaryBuildables, LambdaAfterRemoveStaleTemporaryBuildables);
 
 
 	SUBSCRIBE_UOBJECT_METHOD_AFTER(AFGLightweightBuildableSubsystem, AddFromBuildableInstanceData, LambdaAfterAddFromBuildableInstanceData);
