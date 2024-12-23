@@ -17,6 +17,9 @@ class AFGBuildable;
 class AFGLightweightBuildableSubsystem;
 
 
+DECLARE_LOG_CATEGORY_EXTERN(LogActualMap, Display, All);
+
+
 struct FBuildingData
 {
     TSubclassOf<AFGBuildable> BuildableClass;
@@ -40,7 +43,7 @@ public:
 	virtual void DispatchLifecycleEvent(ELifecyclePhase Phase) override;
 
 private:
-	UE5Coro::TCoroutine<> InitialBuildableGather(TMap<UObject*, int32> Factories, TMap<TSubclassOf<AFGBuildable>, TArray<FRuntimeBuildableInstanceData>> Buildings, FForceLatentCoroutine = {});
+	UE5Coro::TCoroutine<> InitialBuildableGather(TArray<AFGBuildable*> Factories, TMap<TSubclassOf<AFGBuildable>, TArray<FRuntimeBuildableInstanceData>> Buildings, FForceLatentCoroutine = {});
     void RedrawMap();
 	UE5Coro::TCoroutine<> RedrawMapCoroutine(TArray<FBuildingData> AddedBuildings, TArray<FBuildingData> RemovedBuildings, FForceLatentCoroutine = {});
 

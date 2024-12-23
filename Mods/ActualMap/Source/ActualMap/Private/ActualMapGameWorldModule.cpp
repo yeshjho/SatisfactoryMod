@@ -25,6 +25,9 @@ constexpr double ORIGIN_UV[] = { -WEST_BOUND_CENTIMETERS / MAP_WIDTH_CENTIMETERS
 constexpr double PIXEL_PER_CENTIMETER[] = { RENDER_TEXTURE_SIZE / MAP_WIDTH_CENTIMETERS, RENDER_TEXTURE_SIZE / MAP_HEIGHT_CENTIMETERS };
 
 
+DEFINE_LOG_CATEGORY(LogActualMap);
+
+
 FVector2D world_position_to_screen_position(const FVector& WorldPosition, const FVector& Size)
 {
 	return FVector2D{
@@ -76,7 +79,7 @@ void UActualMapGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase)
 			ShouldInitialize = false;
             IsInitializing = true;
 
-			Coroutine = InitialBuildableGather(UFGSaveSession::mObjectToSerailizedVersion, Instance->mBuildableClassToInstanceArray);
+			Coroutine = InitialBuildableGather(AFGBuildableSubsystem::Get(Instance)->GetAllBuildablesRef(), Instance->mBuildableClassToInstanceArray);
 		};
 
 
@@ -89,6 +92,8 @@ void UActualMapGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase)
 			{
 				return;
 			}
+
+            UE_LOG(LogActualMap, Log, TEXT("AddFromBuildableInstanceData"));
 
 			PendingAddBuildingData.Add(
 				{
@@ -111,6 +116,8 @@ void UActualMapGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase)
 				return;
 			}
 
+			UE_LOG(LogActualMap, Log, TEXT("AddFromReplicatedData"));
+
 			PendingAddBuildingData.Add(
 				{
 					.BuildableClass = BuildableClass,
@@ -130,6 +137,8 @@ void UActualMapGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase)
 				return;
 			}
 
+            UE_LOG(LogActualMap, Log, TEXT("AddBuildable"));
+
 			PendingAddBuildingData.Add(
 				{
 					.BuildableClass = Buildable->GetClass(),
@@ -141,20 +150,21 @@ void UActualMapGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase)
 		};
 
 
-	const auto LambdaOnRemoveByBuildable = 
-		[this](auto& Scope, AFGLightweightBuildableSubsystem* Instance, AFGBuildable* Buildable)
+	const auto LambdaAfterInvalidateRuntimeInstanceDataForIndex =
+		[this](AFGLightweightBuildableSubsystem* Instance, TSubclassOf<AFGBuildable> BuildableClass, int32 Index)
 		{
 			if (ShouldInitialize)
 			{
 				return;
 			}
 
-			const int32 Index = Instance->GetRuntimeDataIndexForBuildable(Buildable);
-			const FRuntimeBuildableInstanceData* Data = Instance->GetRuntimeDataForBuildableClassAndIndex(Buildable->GetClass(), Index);
+            UE_LOG(LogActualMap, Log, TEXT("InvalidateRuntimeInstanceDataForIndex"));
+
+			const FRuntimeBuildableInstanceData* Data = Instance->GetRuntimeDataForBuildableClassAndIndex(BuildableClass, Index);
 
             PendingRemoveBuildingData.Add(
                 {
-                    .BuildableClass = Buildable->GetClass(),
+                    .BuildableClass = BuildableClass,
                     .Transform = Data->Transform,
                     .CustomizationData = Data->CustomizationData,
                 }
@@ -170,6 +180,8 @@ void UActualMapGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase)
 			{
 				return;
 			}
+
+            UE_LOG(LogActualMap, Log, TEXT("RemoveBuildable"));
 
 			PendingRemoveBuildingData.Add(
 				{
@@ -192,7 +204,7 @@ void UActualMapGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase)
 	SUBSCRIBE_UOBJECT_METHOD_AFTER(AFGBuildableSubsystem, AddBuildable, LambdaAfterAddBuildable);
 
 
-	SUBSCRIBE_UOBJECT_METHOD(AFGLightweightBuildableSubsystem, RemoveByBuildable, LambdaOnRemoveByBuildable);
+	SUBSCRIBE_UOBJECT_METHOD_AFTER(AFGLightweightBuildableSubsystem, InvalidateRuntimeInstanceDataForIndex, LambdaAfterInvalidateRuntimeInstanceDataForIndex);
 
 	SUBSCRIBE_UOBJECT_METHOD_AFTER(AFGBuildableSubsystem, RemoveBuildable, LambdaAfterRemoveBuildable);
 }
@@ -200,13 +212,15 @@ void UActualMapGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase)
 
 // Factories/Buildings: Intentional copies
 UE5Coro::TCoroutine<> UActualMapGameInstanceModule::InitialBuildableGather(
-	TMap<UObject*, int32> Factories, TMap<TSubclassOf<AFGBuildable>, TArray<FRuntimeBuildableInstanceData>> Buildings, FForceLatentCoroutine)
+	TArray<AFGBuildable*> Factories, TMap<TSubclassOf<AFGBuildable>, TArray<FRuntimeBuildableInstanceData>> Buildings, FForceLatentCoroutine)
 {
+    UE_LOG(LogActualMap, Display, TEXT("InitialBuildableGather Started"));
+
 	CurrentBuildingData.Empty(Factories.Num() + Buildings.Num());
 
 	UE5Coro::Latent::FTickTimeBudget Budget = UE5Coro::Latent::FTickTimeBudget::Milliseconds(1);
 
-	for (const auto [Object, _] : Factories)
+	for (auto* Object : Factories)
 	{
 		if (!Object->IsA<AFGBuildable>())
 		{
@@ -244,6 +258,8 @@ UE5Coro::TCoroutine<> UActualMapGameInstanceModule::InitialBuildableGather(
 		}
 	}
 
+	UE_LOG(LogActualMap, Display, TEXT("InitialBuildableGather Finished"));
+
 	IsInitializing = false;
 	IsPendingRedraw = false;
 	Coroutine = RedrawMapCoroutine(PendingAddBuildingData, PendingRemoveBuildingData);
@@ -256,17 +272,15 @@ void UActualMapGameInstanceModule::RedrawMap()
 {
 	if (!Coroutine.IsDone())
 	{
-        UE_LOG(LogTemp, Warning, TEXT("ActualMap: RedrawMap is already running. Cancelling the previous one."));
 		if (!IsInitializing)
 		{
+            UE_LOG(LogActualMap, Verbose, TEXT("RedrawMapCoroutine Cancelled"));
 			Coroutine.Cancel();
 		}
 		IsPendingRedraw = true;
 	}
 	else
 	{
-        UE_LOG(LogTemp, Warning, TEXT("ActualMap: RedrawMap is not running. Starting a new one."));
-
 		Coroutine = RedrawMapCoroutine(PendingAddBuildingData, PendingRemoveBuildingData);
 		PendingAddBuildingData.Empty();
 		PendingRemoveBuildingData.Empty();
@@ -282,6 +296,8 @@ UE5Coro::TCoroutine<> UActualMapGameInstanceModule::RedrawMapCoroutine(
 	{
         OnCoroutineFinishedOrCancelled();
 	};
+
+    UE_LOG(LogActualMap, Display, TEXT("RedrawMapCoroutine Started"));
 
 	RenderContext = {};
 
@@ -371,7 +387,7 @@ UE5Coro::TCoroutine<> UActualMapGameInstanceModule::RedrawMapCoroutine(
 		co_await Budget;
 	}
 
-    UE_LOG(LogTemp, Warning, TEXT("ActualMap: RedrawMapCoroutine finished"));
+	UE_LOG(LogActualMap, Display, TEXT("RedrawMapCoroutine Finished"));
 }
 
 
@@ -392,5 +408,4 @@ void UActualMapGameInstanceModule::OnCoroutineFinishedOrCancelled()
 	Coroutine = RedrawMapCoroutine(PendingAddBuildingData, PendingRemoveBuildingData);
 	PendingAddBuildingData.Empty();
 	PendingRemoveBuildingData.Empty();
-    UE_LOG(LogTemp, Warning, TEXT("ActualMap: RedrawMapCoroutine restarted"));
 }
