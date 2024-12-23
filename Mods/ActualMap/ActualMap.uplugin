@@ -1,15 +1,15 @@
 {
 	"FileVersion": 3,
-	"Version": 1,
-	"VersionName": "1.0.0",
-	"FriendlyName": "ActualMap",
+	"Version": 0,
+	"VersionName": "0.1.0",
+	"FriendlyName": "Draw Buildings on Map",
 	"Description": "Display your buildings on the map!",
 	"Category": "Modding",
 	"CreatedBy": "yeshjho",
-	"CreatedByURL": "",
+	"CreatedByURL": "https://github.com/yeshjho/SatisfactoryMod/tree/ActualMap",
 	"DocsURL": "",
 	"MarketplaceURL": "",
-	"SupportURL": "",
+	"SupportURL": "https://discord.com/users/353886187879923712",
 	"CanContainContent": true,
 	"IsBetaVersion": false,
 	"IsExperimentalVersion": false,
@@ -28,6 +28,7 @@
 			"SemVersion": "^3.9.0"
 		}
 	],
-	"SemVersion": "1.0.0",
-	"GameVersion": ">=383729"
+	"SemVersion": "0.1.0",
+	"GameVersion": ">=383729",
+	"RequiredOnRemote": false
 }
