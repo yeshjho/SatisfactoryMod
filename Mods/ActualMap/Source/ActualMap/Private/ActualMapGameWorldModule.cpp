@@ -12,6 +12,8 @@
 
 #include "Patching/NativeHookManager.h"
 
+#include "ActualMap_ConfigStruct.h"
+
 
 constexpr int RENDER_TEXTURE_SIZE = 1024 * 8;
 
@@ -218,7 +220,8 @@ UE5Coro::TCoroutine<> UActualMapGameInstanceModule::InitialBuildableGather(
 
 	CurrentBuildingData.Empty(Factories.Num() + Buildings.Num());
 
-	UE5Coro::Latent::FTickTimeBudget Budget = UE5Coro::Latent::FTickTimeBudget::Milliseconds(1);
+	const float TimeBudget = FActualMap_ConfigStruct::GetActiveConfig(GetWorld()).InitializeTimeBudget;
+	UE5Coro::Latent::FTickTimeBudget Budget = UE5Coro::Latent::FTickTimeBudget::Milliseconds(TimeBudget);
 
 	for (auto* Object : Factories)
 	{
@@ -301,7 +304,8 @@ UE5Coro::TCoroutine<> UActualMapGameInstanceModule::RedrawMapCoroutine(
 
 	RenderContext = {};
 
-	UE5Coro::Latent::FTickTimeBudget Budget = UE5Coro::Latent::FTickTimeBudget::Milliseconds(1);
+	const float TimeBudget = FActualMap_ConfigStruct::GetActiveConfig(GetWorld()).RedrawTimeBudget;
+	UE5Coro::Latent::FTickTimeBudget Budget = UE5Coro::Latent::FTickTimeBudget::Milliseconds(TimeBudget);
 
 	for (FBuildingData& AddedBuildingData : AddedBuildings)
 	{

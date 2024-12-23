@@ -2,7 +2,7 @@
 	"FileVersion": 3,
 	"Version": 0,
 	"VersionName": "0.1.0",
-	"FriendlyName": "Draw Buildings on Map",
+	"FriendlyName": "Cartograph",
 	"Description": "Display your buildings on the map!",
 	"Category": "Modding",
 	"CreatedBy": "yeshjho",
