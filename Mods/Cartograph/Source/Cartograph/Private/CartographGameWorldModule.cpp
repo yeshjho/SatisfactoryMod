@@ -214,6 +214,8 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
 {
     UE_LOG(LogCartograph, Display, TEXT("InitialBuildableGather Started"));
 
+    OnInitializationStarted.Broadcast();
+
 	CurrentBuildingData.Empty(Factories.Num() + Buildings.Num());
 
 	UKismetRenderingLibrary::ClearRenderTarget2D(this, RenderTarget, { 0, 0, 0, 0 });
@@ -261,11 +263,13 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
 
 	UE_LOG(LogCartograph, Display, TEXT("InitialBuildableGather Finished"));
 
+    OnInitializationFinished.Broadcast();
+
 	IsInitializing = false;
 	IsPendingRedraw = false;
 	Coroutine = RedrawMapCoroutine(PendingAddBuildingData, PendingRemoveBuildingData);
 	PendingAddBuildingData.Empty();
-	PendingRemoveBuildingData.Empty();
+    PendingRemoveBuildingData.Empty();
 }
 
 

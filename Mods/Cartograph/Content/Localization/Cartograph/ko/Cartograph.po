@@ -1,0 +1,21 @@
+﻿# Cartograph Korean translation.
+# 
+msgid ""
+msgstr ""
+"Project-Id-Version: Cartograph\n"
+"POT-Creation-Date: 2024-12-23 21:38\n"
+"PO-Revision-Date: 2024-12-23 21:38\n"
+"Language-Team: \n"
+"Language: ko\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#. Key:	15A5F98F4C22223DA22291B04774FCCC
+#. SourceLocation:	/Cartograph/UI/BPW_InitializingNotification.BPW_InitializingNotification_C:WidgetTree.InitializingText.Text
+#: /Cartograph/UI/BPW_InitializingNotification.BPW_InitializingNotification_C:WidgetTree.InitializingText.Text
+msgctxt ",15A5F98F4C22223DA22291B04774FCCC"
+msgid "Cartograph: Initializing..."
+msgstr "Cartograph: 초기화 중..."
+

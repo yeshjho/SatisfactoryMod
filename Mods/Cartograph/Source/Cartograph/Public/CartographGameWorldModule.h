@@ -31,6 +31,10 @@ struct FBuildingData
 };
 
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnInitializationStarted);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnInitializationFinished);
+
+
 /**
  * 
  */
@@ -49,6 +53,12 @@ private:
 
 	void OnCoroutineFinishedOrCancelled();
 
+
+public:
+	UPROPERTY(BlueprintAssignable)
+    FOnInitializationStarted OnInitializationStarted;
+	UPROPERTY(BlueprintAssignable)
+    FOnInitializationFinished OnInitializationFinished;
 
 protected:
 	UPROPERTY(EditDefaultsOnly)

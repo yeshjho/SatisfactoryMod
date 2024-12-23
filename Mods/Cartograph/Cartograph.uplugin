@@ -30,5 +30,11 @@
 	],
 	"SemVersion": "0.1.0",
 	"GameVersion": ">=383729",
-	"RequiredOnRemote": false
+	"RequiredOnRemote": false,
+	"LocalizationTargets": [
+		{
+			"Name": "Cartograph",
+			"LoadingPolicy": "Always"
+		}
+	]
 }
