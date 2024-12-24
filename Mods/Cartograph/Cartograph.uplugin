@@ -1,7 +1,7 @@
 {
 	"FileVersion": 3,
 	"Version": 0,
-	"VersionName": "0.3.0",
+	"VersionName": "0.3.1",
 	"FriendlyName": "Cartograph",
 	"Description": "Display your buildings on the map!",
 	"Category": "Modding",
@@ -28,7 +28,7 @@
 			"SemVersion": "^3.9.0"
 		}
 	],
-	"SemVersion": "0.3.0",
+	"SemVersion": "0.3.1",
 	"GameVersion": ">=383729",
 	"RequiredOnRemote": false,
 	"LocalizationTargets": [

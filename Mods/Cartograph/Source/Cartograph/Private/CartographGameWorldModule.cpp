@@ -379,38 +379,57 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 	for (const auto& [Buildable, BuildableClass, Transform, _] : CurrentBuildingData)
 	{
 		CARTO_LOG(TEXT("Buildable: %s, Transform: %s"), *BuildableClass->GetName(), *Transform.ToString());
+
 		if (BuildableClass->ImplementsInterface(UFGSplineBuildableInterface::StaticClass()))
 		{
             const FSplineData* SplineData = BuildableSplineDataMap.Find(BuildableClass.Get());
 			if (!SplineData || !IsValid(Buildable))
 			{
-				CARTO_LOG(TEXT("Buildable is invalid"));
 				continue;
 			}
 
             const auto* SplineBuildable = Cast<IFGSplineBuildableInterface>(Buildable);
 			USplineComponent* SplineComponent = SplineBuildable->GetSplineComponent();
 
-			const float SplineLength = SplineComponent->GetSplineLength();
-			const int Segments = FMath::Max(2, FMath::CeilToInt(SplineLength / SplineData->SparsityCached));
-			const float Step = SplineComponent->SplineCurves.ReparamTable.Points.Num() / static_cast<float>(Segments);
-			for (int i = 0; i < Segments; ++i)
+			const int SplinePointCount = SplineComponent->SplineCurves.ReparamTable.Points.Num();
+			if (SplinePointCount < 2)
 			{
-				const FVector Start = SplineComponent->GetLocationAtSplineInputKey(i * Step, ESplineCoordinateSpace::World);
-				const FVector End = SplineComponent->GetLocationAtSplineInputKey((i + 1) * Step, ESplineCoordinateSpace::World);
-				const FVector2D StartScreenPosition = world_position_to_screen_position(Start, FVector::ZeroVector);
-				const FVector2D EndScreenPosition = world_position_to_screen_position(End, FVector::ZeroVector);
-				FCanvasLineItem LineItem{
-					StartScreenPosition,
-					EndScreenPosition
-				};
-				LineItem.LineThickness = SplineData->Thickness;
-				LineItem.SetColor(SplineData->Color);
-				// Only opaque lines are supported
-				// LineItem.BlendMode = FCanvas::BlendToSimpleElementBlend
-				Canvas->DrawItem(LineItem);
+				continue;
+			}
 
-				co_await Budget;
+			float PrevInVal = 0;
+			for (int i = 1; i < SplinePointCount; i++)
+			{
+				const FInterpCurvePoint<float>& SplinePoint = SplineComponent->SplineCurves.ReparamTable.Points[i];
+				const float InVal = SplinePoint.InVal;
+				const float SegmentLength = InVal - PrevInVal;
+                PrevInVal = InVal;
+
+				const int Segments = FMath::CeilToInt(SegmentLength / SplineData->SparsityCached);
+				const float Step = 1.f / Segments;
+
+				for (int j = 0; j < Segments; j++)
+				{
+                    const float StartKey = (i - 1) + j * Step;
+                    const float EndKey = (i - 1) + (j + 1) * Step;
+
+					const FVector Start = SplineComponent->GetLocationAtSplineInputKey(StartKey, ESplineCoordinateSpace::World);
+					const FVector End = SplineComponent->GetLocationAtSplineInputKey(EndKey, ESplineCoordinateSpace::World);
+					const FVector2D StartScreenPosition = world_position_to_screen_position(Start, FVector::ZeroVector);
+					const FVector2D EndScreenPosition = world_position_to_screen_position(End, FVector::ZeroVector);
+
+					FCanvasLineItem LineItem{
+						StartScreenPosition,
+						EndScreenPosition
+					};
+					LineItem.LineThickness = SplineData->Thickness;
+					LineItem.SetColor(SplineData->Color);
+					// Only opaque lines are supported
+					// LineItem.BlendMode = FCanvas::BlendToSimpleElementBlend
+					Canvas->DrawItem(LineItem);
+
+					co_await Budget;
+				}
 			}
 
 			continue;
