@@ -9,6 +9,7 @@
 #include "FGBuildableFoundation.h"
 #include "FGBuildableSubsystem.h"
 #include "FGSaveSession.h"
+#include "FGSplineBuildableInterface.h"
 
 #include "Patching/NativeHookManager.h"
 
@@ -28,6 +29,10 @@ constexpr double PIXEL_PER_CENTIMETER[] = { RENDER_TEXTURE_SIZE / MAP_WIDTH_CENT
 
 
 DEFINE_LOG_CATEGORY(LogCartograph);
+
+
+constexpr bool ENABLE_LOG = false;
+#define CARTO_LOG(...) if constexpr (ENABLE_LOG) UE_LOG(LogCartograph, Display, __VA_ARGS__)
 
 
 FVector2D world_position_to_screen_position(const FVector& WorldPosition, const FVector& Size)
@@ -92,10 +97,11 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 				return;
 			}
 
-            UE_LOG(LogCartograph, Log, TEXT("AddFromBuildableInstanceData"));
+			CARTO_LOG(TEXT("AddFromBuildableInstanceData: %s"), *BuildableClass->GetName());
 
 			PendingAddBuildingData.Add(
 				{
+                    .Buildable = nullptr,
 					.BuildableClass = BuildableClass,
 					.Transform = BuildableInstanceData.Transform,
 					.CustomizationData = BuildableInstanceData.CustomizationData,
@@ -115,10 +121,11 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 				return;
 			}
 
-			UE_LOG(LogCartograph, Log, TEXT("AddFromReplicatedData"));
+			CARTO_LOG(TEXT("AddFromReplicatedData: %s"), *BuildableClass->GetName());
 
 			PendingAddBuildingData.Add(
 				{
+					.Buildable = nullptr,
 					.BuildableClass = BuildableClass,
 					.Transform = ReplicationData.Transform,
 					.CustomizationData = ReplicationData.CustomizationData,
@@ -136,10 +143,11 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 				return;
 			}
 
-            UE_LOG(LogCartograph, Log, TEXT("AddBuildable"));
+			CARTO_LOG(TEXT("AddBuildable: %s"), *Buildable->GetClass()->GetName());
 
 			PendingAddBuildingData.Add(
 				{
+                    .Buildable = Buildable,
 					.BuildableClass = Buildable->GetClass(),
 					.Transform = Buildable->GetTransform(),
 					.CustomizationData = Buildable->GetCustomizationData_Native(),
@@ -157,12 +165,13 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 				return;
 			}
 
-            UE_LOG(LogCartograph, Log, TEXT("InvalidateRuntimeInstanceDataForIndex"));
+			CARTO_LOG(TEXT("InvalidateRuntimeInstanceDataForIndex: %s"), *BuildableClass->GetName());
 
 			const FRuntimeBuildableInstanceData* Data = Instance->GetRuntimeDataForBuildableClassAndIndex(BuildableClass, Index);
 
             PendingRemoveBuildingData.Add(
                 {
+					.Buildable = nullptr,
                     .BuildableClass = BuildableClass,
                     .Transform = Data->Transform,
                     .CustomizationData = Data->CustomizationData,
@@ -180,10 +189,11 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 				return;
 			}
 
-            UE_LOG(LogCartograph, Log, TEXT("RemoveBuildable"));
+			CARTO_LOG(TEXT("RemoveBuildable: %s"), *Buildable->GetClass()->GetName());
 
 			PendingRemoveBuildingData.Add(
 				{
+                    .Buildable = Buildable,
 					.BuildableClass = Buildable->GetClass(),
 					.Transform = Buildable->GetTransform(),
 					.CustomizationData = Buildable->GetCustomizationData_Native(),
@@ -212,7 +222,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
 	TArray<AFGBuildable*> Factories, TMap<TSubclassOf<AFGBuildable>, TArray<FRuntimeBuildableInstanceData>> Buildings, FForceLatentCoroutine)
 {
-    UE_LOG(LogCartograph, Display, TEXT("InitialBuildableGather Started"));
+	CARTO_LOG(TEXT("InitialBuildableGather Started"));
 
     OnInitializationStarted.Broadcast();
 
@@ -233,6 +243,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
 		auto* Buildable = Cast<AFGBuildable>(Object);
 
 		FBuildingData NewBuildingData{
+            .Buildable = Buildable,
 			.BuildableClass = Buildable->GetClass(),
 			.Transform = Buildable->GetTransform(),
             .CustomizationData = Buildable->GetCustomizationData_Native(),
@@ -249,6 +260,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
 		for (const FRuntimeBuildableInstanceData& InstanceData : Arr)
 		{
 			FBuildingData NewBuildingData{
+				.Buildable = nullptr,
 				.BuildableClass = Type,
 				.Transform = InstanceData.Transform,
 				.CustomizationData = InstanceData.CustomizationData,
@@ -261,7 +273,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
 		}
 	}
 
-	UE_LOG(LogCartograph, Display, TEXT("InitialBuildableGather Finished"));
+	CARTO_LOG(TEXT("InitialBuildableGather Finished"));
 
     OnInitializationFinished.Broadcast();
 
@@ -279,7 +291,7 @@ void UCartographGameInstanceModule::RedrawMap()
 	{
 		if (!IsInitializing)
 		{
-            UE_LOG(LogCartograph, Verbose, TEXT("RedrawMapCoroutine Cancelled"));
+			CARTO_LOG(TEXT("RedrawMapCoroutine Cancel Requested"));
 			Coroutine.Cancel();
 		}
 		IsPendingRedraw = true;
@@ -302,46 +314,108 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
         OnCoroutineFinishedOrCancelled();
 	};
 
-    UE_LOG(LogCartograph, Display, TEXT("RedrawMapCoroutine Started"));
-
-	RenderContext = {};
+	CARTO_LOG(TEXT("RedrawMapCoroutine Started"));
 
 	const float TimeBudget = FCartograph_ConfigStruct::GetActiveConfig(GetWorld()).RedrawTimeBudget;
 	UE5Coro::Latent::FTickTimeBudget Budget = UE5Coro::Latent::FTickTimeBudget::Milliseconds(TimeBudget);
 
-	for (FBuildingData& AddedBuildingData : AddedBuildings)
 	{
-		const int32 Pos = Algo::LowerBound(CurrentBuildingData, AddedBuildingData);
-		CurrentBuildingData.Insert(std::move(AddedBuildingData), Pos);
+        UE5Coro::FCancellationGuard Guard{};  // We'll lose added/removed building information if the coroutine is cancelled
 
-		co_await Budget;
+		for (FBuildingData& AddedBuildingData : AddedBuildings)
+		{
+	        CARTO_LOG(TEXT("AddedBuilding: %s"), *AddedBuildingData.BuildableClass->GetName());
+
+			const int32 Pos = Algo::LowerBound(CurrentBuildingData, AddedBuildingData);
+			CurrentBuildingData.Insert(std::move(AddedBuildingData), Pos);
+
+			co_await Budget;
+		}
+
+	    for (const FBuildingData& RemovedBuildingData : RemovedBuildings)
+	    {
+	        CARTO_LOG(TEXT("RemovedBuilding: %s"), *RemovedBuildingData.BuildableClass->GetName());
+
+	        const int32 Start = Algo::LowerBound(CurrentBuildingData, RemovedBuildingData);
+	        const int32 End = Algo::UpperBound(CurrentBuildingData, RemovedBuildingData);
+
+	        for (int32 i = Start; i < End; ++i)
+	        {
+	            if (CurrentBuildingData[i] == RemovedBuildingData)
+	            {
+	                CurrentBuildingData.RemoveAt(i);
+	                break;
+	            }
+	        }
+
+	        co_await Budget;
+	    }
+
+        CARTO_LOG(TEXT("Buildings Change Processed"));
 	}
 
-    for (const FBuildingData& RemovedBuildingData : RemovedBuildings)
-    {
-        const int32 Start = Algo::LowerBound(CurrentBuildingData, RemovedBuildingData);
-        const int32 End = Algo::UpperBound(CurrentBuildingData, RemovedBuildingData);
-
-        for (int32 i = Start; i < End; ++i)
-        {
-            if (CurrentBuildingData[i] == RemovedBuildingData)
-            {
-                CurrentBuildingData.RemoveAt(i);
-                break;
-            }
-        }
-
-        co_await Budget;
-    }
-
 	UKismetRenderingLibrary::ClearRenderTarget2D(this, RenderTarget, { 0, 0, 0, 0 });
+
+	// Sometimes lines go crazy (goes to the top or far right) if we don't delay.
+	// My guess is because EndDraw and BeginDraw are called in the same frame, so I'm putting it here.
+	co_await UE5Coro::Latent::NextTick();
 
 	UCanvas* Canvas = nullptr;
 	FVector2D Size;
 	UKismetRenderingLibrary::BeginDrawCanvasToRenderTarget(this, RenderTarget, Canvas, Size, RenderContext);
 
-	for (const auto& [BuildableClass, Transform, _] : CurrentBuildingData)
+	FCartograph_ConfigStruct ConfigInstance = FCartograph_ConfigStruct::GetActiveConfig(GetWorld());
+    for (auto& [_, SplineData] : BuildableSplineDataMap)
+    {
+		FProperty* Property = FCartograph_ConfigStruct::StaticStruct()->FindPropertyByName(SplineData.SparsityConfigName);
+        if (!Property)
+        {
+            UE_LOG(LogCartograph, Error, TEXT("SparsityConfigName not found: %s"), *SplineData.SparsityConfigName.ToString());
+            continue;
+        }
+		SplineData.SparsityCached = *Property->ContainerPtrToValuePtr<int>(&ConfigInstance);
+    }
+
+	for (const auto& [Buildable, BuildableClass, Transform, _] : CurrentBuildingData)
 	{
+		CARTO_LOG(TEXT("Buildable: %s, Transform: %s"), *BuildableClass->GetName(), *Transform.ToString());
+		if (BuildableClass->ImplementsInterface(UFGSplineBuildableInterface::StaticClass()))
+		{
+            const FSplineData* SplineData = BuildableSplineDataMap.Find(BuildableClass.Get());
+			if (!SplineData || !IsValid(Buildable))
+			{
+				CARTO_LOG(TEXT("Buildable is invalid"));
+				continue;
+			}
+
+            const auto* SplineBuildable = Cast<IFGSplineBuildableInterface>(Buildable);
+			USplineComponent* SplineComponent = SplineBuildable->GetSplineComponent();
+
+			const float SplineLength = SplineComponent->GetSplineLength();
+			const int Segments = FMath::Max(2, FMath::CeilToInt(SplineLength / SplineData->SparsityCached));
+			const float Step = SplineComponent->SplineCurves.ReparamTable.Points.Num() / static_cast<float>(Segments);
+			for (int i = 0; i < Segments; ++i)
+			{
+				const FVector Start = SplineComponent->GetLocationAtSplineInputKey(i * Step, ESplineCoordinateSpace::World);
+				const FVector End = SplineComponent->GetLocationAtSplineInputKey((i + 1) * Step, ESplineCoordinateSpace::World);
+				const FVector2D StartScreenPosition = world_position_to_screen_position(Start, FVector::ZeroVector);
+				const FVector2D EndScreenPosition = world_position_to_screen_position(End, FVector::ZeroVector);
+				FCanvasLineItem LineItem{
+					StartScreenPosition,
+					EndScreenPosition
+				};
+				LineItem.LineThickness = SplineData->Thickness;
+				LineItem.SetColor(SplineData->Color);
+				// Only opaque lines are supported
+				// LineItem.BlendMode = FCanvas::BlendToSimpleElementBlend
+				Canvas->DrawItem(LineItem);
+
+				co_await Budget;
+			}
+
+			continue;
+		}
+
 		const TSoftObjectPtr<UTexture2D>* Texture = BuildableToIconMap.Find(BuildableClass.Get());
 		if (!Texture || Texture->IsNull())
 		{
@@ -393,15 +467,18 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 		co_await Budget;
 	}
 
-	UE_LOG(LogCartograph, Display, TEXT("RedrawMapCoroutine Finished"));
+	CARTO_LOG(TEXT("RedrawMapCoroutine Finished"));
 }
 
 
 void UCartographGameInstanceModule::OnCoroutineFinishedOrCancelled()
 {
+    CARTO_LOG(TEXT("OnCoroutineFinishedOrCancelled"));
+
     if (RenderContext.RenderTarget)
     {
         UKismetRenderingLibrary::EndDrawCanvasToRenderTarget(this, RenderContext);
+		RenderContext = {};
     }
 
 	if (!IsPendingRedraw)

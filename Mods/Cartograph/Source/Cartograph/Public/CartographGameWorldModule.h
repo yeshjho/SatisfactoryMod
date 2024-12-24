@@ -22,12 +22,31 @@ DECLARE_LOG_CATEGORY_EXTERN(LogCartograph, Display, All);
 
 struct FBuildingData
 {
+    AFGBuildable* Buildable;  // nullptr for LightweightBuildables. Make sure to check IsValid(Buildable) before using it.
     TSubclassOf<AFGBuildable> BuildableClass;
 	FTransform Transform;
 	FFactoryCustomizationData CustomizationData;
 
 	bool operator==(const FBuildingData& Other) const noexcept;
 	auto operator<=>(const FBuildingData& Other) const noexcept;
+};
+
+
+USTRUCT()
+struct FSplineData
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditDefaultsOnly)
+	FLinearColor Color;
+
+	UPROPERTY(EditDefaultsOnly)
+    float Thickness;
+
+	UPROPERTY(EditDefaultsOnly)
+	FName SparsityConfigName;
+
+	int SparsityCached;
 };
 
 
@@ -71,9 +90,13 @@ protected:
 	TMap<TSoftClassPtr<AFGBuildable>, FRotator> BuildableExtraRotationMap;
 
 	UPROPERTY(EditDefaultsOnly)
+	TMap<TSoftClassPtr<AFGBuildable>, FSplineData> BuildableSplineDataMap;
+
+	UPROPERTY(EditDefaultsOnly)
 	TObjectPtr<UCanvasRenderTarget2D> RenderTarget;
 
 	bool ShouldInitialize = false;
+	UPROPERTY(BlueprintReadOnly)
 	bool IsInitializing = false;
 
 	UE5Coro::TCoroutine<> Coroutine = UE5Coro::TCoroutine<>::CompletedCoroutine;

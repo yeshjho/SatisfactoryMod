@@ -15,6 +15,18 @@ public:
     UPROPERTY(BlueprintReadWrite)
     float RedrawTimeBudget{};
 
+    UPROPERTY(BlueprintReadWrite)
+    int32 ConveyorBeltSplineSegmentSparsity{};
+
+    UPROPERTY(BlueprintReadWrite)
+    int32 PipelineSplineSegmentSparsity{};
+
+    UPROPERTY(BlueprintReadWrite)
+    int32 RailwaySegmentSparsity{};
+
+    UPROPERTY(BlueprintReadWrite)
+    int32 HypertubeSegmentSparsity{};
+
     /* Retrieves active configuration value and returns object of this struct containing it */
     static FCartograph_ConfigStruct GetActiveConfig(UObject* WorldContext) {
         FCartograph_ConfigStruct ConfigStruct{};
