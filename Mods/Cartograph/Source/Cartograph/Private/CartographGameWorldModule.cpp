@@ -8,6 +8,7 @@
 #include "FGBuildable.h"
 #include "FGBuildableFoundation.h"
 #include "FGBuildableSubsystem.h"
+#include "FGBuildableWire.h"
 #include "FGSaveSession.h"
 #include "FGSplineBuildableInterface.h"
 
@@ -42,6 +43,22 @@ FVector2D world_position_to_screen_position(const FVector& WorldPosition, const 
 		ORIGIN_UV[0] + (WorldPosition.X - Size.X / 2) / MAP_WIDTH_CENTIMETERS,
 		ORIGIN_UV[1] + (WorldPosition.Y - Size.Y / 2) / MAP_HEIGHT_CENTIMETERS
 	} * RENDER_TEXTURE_SIZE;
+}
+
+
+void draw_line(UCanvas* Canvas, const FVector& WorldStart, const FVector& WorldEnd, const FLinearColor& Color, float Thickness)
+{
+    const FVector2D StartScreenPosition = world_position_to_screen_position(WorldStart, FVector::ZeroVector);
+    const FVector2D EndScreenPosition = world_position_to_screen_position(WorldEnd, FVector::ZeroVector);
+	FCanvasLineItem LineItem{
+		StartScreenPosition,
+		EndScreenPosition
+	};
+	LineItem.LineThickness = Thickness;
+	LineItem.SetColor(Color);
+	// Only opaque lines are supported
+	// LineItem.BlendMode = FCanvas::BlendToSimpleElementBlend
+	Canvas->DrawItem(LineItem);
 }
 
 
@@ -411,18 +428,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 
 					const FVector Start = SplineComponent->GetLocationAtSplineInputKey(StartKey, ESplineCoordinateSpace::World);
 					const FVector End = SplineComponent->GetLocationAtSplineInputKey(EndKey, ESplineCoordinateSpace::World);
-					const FVector2D StartScreenPosition = world_position_to_screen_position(Start, FVector::ZeroVector);
-					const FVector2D EndScreenPosition = world_position_to_screen_position(End, FVector::ZeroVector);
-
-					FCanvasLineItem LineItem{
-						StartScreenPosition,
-						EndScreenPosition
-					};
-					LineItem.LineThickness = SplineData->Thickness;
-					LineItem.SetColor(SplineData->Color);
-					// Only opaque lines are supported
-					// LineItem.BlendMode = FCanvas::BlendToSimpleElementBlend
-					Canvas->DrawItem(LineItem);
+                    draw_line(Canvas, Start, End, SplineData->Color, SplineData->Thickness);
 
 					// Not co_awaiting here because the Buildable and SplineComponent might become invalid after resuming.
                     // I could copy the relevant data, but let's hope it doesn't take too long.
@@ -432,6 +438,22 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 			co_await Budget;
 			continue;
 		}
+
+		if (BuildableClass->IsChildOf(AFGBuildableWire::StaticClass()))
+        {
+            const FWireData* WireData = BuildableWireDataMap.Find(BuildableClass.Get());
+            if (!WireData || !Buildable.IsValid())
+            {
+                continue;
+            }
+
+            const auto* Wire = Cast<AFGBuildableWire>(Buildable);
+            const FVector Start = Wire->GetConnectionLocation(0);
+            const FVector End = Wire->GetConnectionLocation(1);
+            draw_line(Canvas, Start, End, WireData->Color, WireData->Thickness);
+
+            co_await Budget;
+        }
 
 		const TSoftObjectPtr<UTexture2D>* Texture = BuildableToIconMap.Find(BuildableClass.Get());
 		if (!Texture || Texture->IsNull())

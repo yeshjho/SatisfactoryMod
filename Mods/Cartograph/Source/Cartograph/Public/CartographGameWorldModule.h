@@ -50,6 +50,19 @@ struct FSplineData
 };
 
 
+USTRUCT()
+struct FWireData
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditDefaultsOnly)
+    FLinearColor Color;
+
+	UPROPERTY(EditDefaultsOnly)
+	float Thickness;
+};
+
+
 /**
  * 
  */
@@ -80,6 +93,9 @@ protected:
 
 	UPROPERTY(EditDefaultsOnly)
 	TMap<TSoftClassPtr<AFGBuildable>, FSplineData> BuildableSplineDataMap;
+
+	UPROPERTY(EditDefaultsOnly)
+    TMap<TSoftClassPtr<AFGBuildable>, FWireData> BuildableWireDataMap;
 
 	UPROPERTY(EditDefaultsOnly)
 	TObjectPtr<UCanvasRenderTarget2D> RenderTarget;
