@@ -62,6 +62,22 @@ void draw_line(UCanvas* Canvas, const FVector& WorldStart, const FVector& WorldE
 }
 
 
+void clear_render_target_portion(UCanvas* Canvas, const FBox2D& Region)
+{
+	const FVector2D Size = Region.GetSize();
+	const FVector2D ScreenPosition = world_position_to_screen_position(Region.GetCenter(), Size);
+	FCanvasTileItem TileItem{
+		ScreenPosition,
+		{ Size.X * PIXEL_PER_CENTIMETER[0], Size.Y * PIXEL_PER_CENTIMETER[1] },
+		{ 0, 0, 0, 0 }
+	};
+	TileItem.PivotPoint = { 0.5, 0.5 };
+	TileItem.BlendMode = SE_BLEND_Opaque;
+
+	Canvas->DrawItem(TileItem);
+}
+
+
 auto FBuildingData::operator<=>(const FBuildingData& Other) const noexcept
 {
 	return Transform.GetLocation().Z <=> Other.Transform.GetLocation().Z;
@@ -367,8 +383,6 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
         CARTO_LOG(TEXT("Buildings Change Processed"));
 	}
 
-	UKismetRenderingLibrary::ClearRenderTarget2D(this, RenderTarget, { 0, 0, 0, 0 });
-
 	// Sometimes lines go crazy (goes to the top or far right) if we don't delay.
 	// My guess is because EndDraw and BeginDraw are called in the same frame, so I'm putting it here.
 	co_await UE5Coro::Latent::NextTick();
@@ -376,6 +390,8 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 	UCanvas* Canvas = nullptr;
 	FVector2D Size;
 	UKismetRenderingLibrary::BeginDrawCanvasToRenderTarget(this, RenderTarget, Canvas, Size, RenderContext);
+
+	clear_render_target_portion(Canvas, FBox2D{ { WEST_BOUND_CENTIMETERS, NORTH_BOUND_CENTIMETERS }, { EAST_BOUND_CENTIMETERS, SOUTH_BOUND_CENTIMETERS } });
 
 	FCartograph_ConfigStruct ConfigInstance = FCartograph_ConfigStruct::GetActiveConfig(GetWorld());
     for (auto& [_, SplineData] : BuildableSplineDataMap)
