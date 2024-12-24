@@ -36,7 +36,9 @@ constexpr bool ENABLE_LOG = false;
 #define CARTO_LOG(...) if constexpr (ENABLE_LOG) UE_LOG(LogCartograph, Display, __VA_ARGS__)
 
 
-FVector2D world_position_to_screen_position(const FVector& WorldPosition, const FVector& Size)
+template<typename T>
+    requires std::is_same_v<T, FVector> || std::is_same_v<T, FVector2D>
+FVector2D world_position_to_screen_position(const T& WorldPosition, const T& Size)
 {
 	return FVector2D{
 		// TODO: Width / 2 & Height / 2: Only verified for foundations
@@ -89,6 +91,11 @@ bool FBuildingData::operator==(const FBuildingData& Other) const noexcept
     return BuildableClass == Other.BuildableClass && Transform.Equals(Other.Transform);
     // Ignoring CustomizationData on purpose
 }
+
+
+UCartographGameInstanceModule::UCartographGameInstanceModule()
+	: CurrentBuildingQuadTree(FBox2D{ { WEST_BOUND_CENTIMETERS, NORTH_BOUND_CENTIMETERS }, { EAST_BOUND_CENTIMETERS, SOUTH_BOUND_CENTIMETERS } })
+{}
 
 
 void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase)
@@ -178,9 +185,13 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 
 			CARTO_LOG(TEXT("AddBuildable: %s"), *Buildable->GetClass()->GetName());
 
+			FVector Origin;
+			FVector Extent;
+			Buildable->GetActorBounds(false, Origin, Extent, true);
 			PendingAddBuildingData.Add(
 				{
                     .Buildable = Buildable,
+					.BoundingBox = FBox2D{ FVector2D{ Origin - Extent }, FVector2D{ Origin + Extent } },
 					.BuildableClass = Buildable->GetClass(),
 					.Transform = Buildable->GetTransform(),
 					.CustomizationData = Buildable->GetCustomizationData_Native(),
@@ -224,9 +235,13 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 
 			CARTO_LOG(TEXT("RemoveBuildable: %s"), *Buildable->GetClass()->GetName());
 
+			FVector Origin;
+            FVector Extent;
+			Buildable->GetActorBounds(false, Origin, Extent, true);
 			PendingRemoveBuildingData.Add(
 				{
-                    .Buildable = Buildable,
+					.Buildable = Buildable,
+					.BoundingBox = FBox2D{ FVector2D{ Origin - Extent }, FVector2D{ Origin + Extent } },
 					.BuildableClass = Buildable->GetClass(),
 					.Transform = Buildable->GetTransform(),
 					.CustomizationData = Buildable->GetCustomizationData_Native(),
@@ -270,7 +285,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
 		{
 			continue;
 		}
-
+		
 		auto* Buildable = Cast<AFGBuildable>(Object);
 
 		FBuildingData NewBuildingData{
@@ -280,8 +295,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
             .CustomizationData = Buildable->GetCustomizationData_Native(),
 		};
 
-		const int32 Pos = Algo::LowerBound(CurrentBuildingData, NewBuildingData);
-		CurrentBuildingData.Insert(std::move(NewBuildingData), Pos);
+        AddToCurrentBuildingData(NewBuildingData);
 
 		co_await Budget;
 	}
@@ -297,8 +311,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
 				.CustomizationData = InstanceData.CustomizationData,
 			};
 
-			const int32 Pos = Algo::LowerBound(CurrentBuildingData, NewBuildingData);
-			CurrentBuildingData.Insert(std::move(NewBuildingData), Pos);
+			AddToCurrentBuildingData(NewBuildingData);
 
 			co_await Budget;
 		}
@@ -306,8 +319,6 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
 
 	CARTO_LOG(TEXT("InitialBuildableGather Finished"));
 
-	IsInitializing = false;
-	IsPendingRedraw = false;
 	Coroutine = RedrawMapCoroutine(PendingAddBuildingData, PendingRemoveBuildingData);
 	PendingAddBuildingData.Empty();
     PendingRemoveBuildingData.Empty();
@@ -354,29 +365,14 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 		for (FBuildingData& AddedBuildingData : AddedBuildings)
 		{
 	        CARTO_LOG(TEXT("AddedBuilding: %s"), *AddedBuildingData.BuildableClass->GetName());
-
-			const int32 Pos = Algo::LowerBound(CurrentBuildingData, AddedBuildingData);
-			CurrentBuildingData.Insert(std::move(AddedBuildingData), Pos);
-
+            AddToCurrentBuildingData(AddedBuildingData);
 			co_await Budget;
 		}
 
 	    for (const FBuildingData& RemovedBuildingData : RemovedBuildings)
 	    {
 	        CARTO_LOG(TEXT("RemovedBuilding: %s"), *RemovedBuildingData.BuildableClass->GetName());
-
-	        const int32 Start = Algo::LowerBound(CurrentBuildingData, RemovedBuildingData);
-	        const int32 End = Algo::UpperBound(CurrentBuildingData, RemovedBuildingData);
-
-	        for (int32 i = Start; i < End; ++i)
-	        {
-	            if (CurrentBuildingData[i] == RemovedBuildingData)
-	            {
-	                CurrentBuildingData.RemoveAt(i);
-	                break;
-	            }
-	        }
-
+            RemoveFromCurrentBuildingData(RemovedBuildingData);
 	        co_await Budget;
 	    }
 
@@ -405,7 +401,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 		SplineData.SparsityCached = *Property->ContainerPtrToValuePtr<int>(&ConfigInstance);
     }
 
-	for (const auto& [Buildable, BuildableClass, Transform, _] : CurrentBuildingData)
+	for (const auto& [Buildable, BoundingBox, BuildableClass, Transform, _] : CurrentBuildingData)
 	{
 		CARTO_LOG(TEXT("Buildable: %s, Transform: %s"), *BuildableClass->GetName(), *Transform.ToString());
 
@@ -477,20 +473,12 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 			continue;
 		}
 
-		FVector BuildableSize = Transform.GetScale3D();
-		if (const FVector* GivenSize = BuildableSizeMap.Find(BuildableClass.Get()))
-		{
-            BuildableSize *= *GivenSize;
-		}
-		else if (BuildableClass->IsChildOf(AFGBuildableFoundation::StaticClass()))
-		{
-			const AFGBuildableFoundation* Foundation = Cast<AFGBuildableFoundation>(BuildableClass->ClassDefaultObject);
-            BuildableSize *= { Foundation->mWidth, Foundation->mDepth, Foundation->mHeight };
-		}
-		else
-		{
-			continue;
-		}
+		const TOptional<FVector> BuildableSizeOpt = GetBuildableSize(BuildableClass);
+        if (!BuildableSizeOpt)
+        {
+            continue;
+        }
+		const FVector BuildableSize = BuildableSizeOpt.GetValue() * Transform.GetScale3D();
 
 		const UTexture2D* LoadedTexture = Texture->Get();
 		if (!LoadedTexture)
@@ -522,6 +510,8 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 		co_await Budget;
 	}
 
+	IsInitializing = false;
+
 	CARTO_LOG(TEXT("RedrawMapCoroutine Finished"));
 }
 
@@ -546,4 +536,86 @@ void UCartographGameInstanceModule::OnCoroutineFinishedOrCancelled()
 	Coroutine = RedrawMapCoroutine(PendingAddBuildingData, PendingRemoveBuildingData);
 	PendingAddBuildingData.Empty();
 	PendingRemoveBuildingData.Empty();
+}
+
+
+TOptional<FVector> UCartographGameInstanceModule::GetBuildableSize(TSubclassOf<AFGBuildable> BuildableClass) const
+{
+	if (const FVector* GivenSize = BuildableSizeMap.Find(BuildableClass.Get()))
+	{
+		return *GivenSize;
+	}
+
+	if (BuildableClass->IsChildOf(AFGBuildableFoundation::StaticClass()))
+	{
+		const AFGBuildableFoundation* Foundation = Cast<AFGBuildableFoundation>(BuildableClass->ClassDefaultObject);
+		return FVector{ Foundation->mWidth, Foundation->mDepth, Foundation->mHeight };
+	}
+
+	return {};
+}
+
+
+TOptional<FBox2D> UCartographGameInstanceModule::GetBuildableBounds(const FBuildingData& BuildingData) const
+{
+	constexpr float BoundInflation = 1.5f;
+
+	if (BuildingData.BoundingBox)
+	{
+        return *BuildingData.BoundingBox;
+	}
+
+	const TOptional<FVector> BuildableSize = GetBuildableSize(BuildingData.BuildableClass);
+	if (!BuildableSize)
+	{
+		return {};
+	}
+
+	const float HalfWidth = BuildableSize->X / 2;
+	const float HalfHeight = BuildableSize->Y / 2;
+	FVector2D LocalCorners[] = {
+		{ -HalfWidth, -HalfHeight },
+		{ HalfWidth, -HalfHeight },
+		{ HalfWidth,  HalfHeight },
+		{ -HalfWidth,  HalfHeight },
+	};
+	for (FVector2D& Corner : LocalCorners)
+	{
+		Corner = FVector2D{ BuildingData.Transform.TransformPosition(FVector{ Corner, 0 }) };
+	}
+
+	return FBox2D{ LocalCorners, 4 }.ExpandBy(BoundInflation);
+}
+
+
+void UCartographGameInstanceModule::AddToCurrentBuildingData(FBuildingData& BuildingData)
+{
+	const int32 Pos = Algo::LowerBound(CurrentBuildingData, BuildingData);
+	CurrentBuildingData.Insert(std::move(BuildingData), Pos);
+
+	if (const TOptional<FBox2D> Bounds = GetBuildableBounds(BuildingData))
+    {
+		CurrentBuildingQuadTree.Insert(BuildingData, *Bounds);
+    }
+}
+
+
+void UCartographGameInstanceModule::RemoveFromCurrentBuildingData(const FBuildingData& BuildingData)
+{
+	const int32 Start = Algo::LowerBound(CurrentBuildingData, BuildingData);
+	const int32 End = Algo::UpperBound(CurrentBuildingData, BuildingData);
+
+	for (int32 i = Start; i < End; ++i)
+	{
+		if (CurrentBuildingData[i] == BuildingData)
+		{
+			CurrentBuildingData.RemoveAt(i);
+			break;
+		}
+	}
+
+	if (const TOptional<FBox2D> Bounds = GetBuildableBounds(BuildingData))
+	{
+		CurrentBuildingQuadTree.Remove(BuildingData, *Bounds);
+	}
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "GenericQuadTree.h"
 #include "Kismet/KismetRenderingLibrary.h"
 #include "Module/GameInstanceModule.h"
 
@@ -23,6 +24,7 @@ DECLARE_LOG_CATEGORY_EXTERN(LogCartograph, Display, All);
 struct FBuildingData
 {
     TWeakObjectPtr<AFGBuildable> Buildable;  // nullptr for LightweightBuildables.
+	TOptional<FBox2D> BoundingBox;
     TSubclassOf<AFGBuildable> BuildableClass;
 	FTransform Transform;
 	FFactoryCustomizationData CustomizationData;
@@ -72,6 +74,7 @@ class CARTOGRAPH_API UCartographGameInstanceModule : public UGameInstanceModule
 	GENERATED_BODY()
 
 public:
+	UCartographGameInstanceModule();
 	virtual void DispatchLifecycleEvent(ELifecyclePhase Phase) override;
 
 private:
@@ -80,6 +83,13 @@ private:
 	UE5Coro::TCoroutine<> RedrawMapCoroutine(TArray<FBuildingData> AddedBuildings, TArray<FBuildingData> RemovedBuildings, FForceLatentCoroutine = {});
 
 	void OnCoroutineFinishedOrCancelled();
+
+    TOptional<FVector> GetBuildableSize(TSubclassOf<AFGBuildable> BuildableClass) const;
+	TOptional<FBox2D> GetBuildableBounds(const FBuildingData& BuildingData) const;
+
+    void AddToCurrentBuildingData(FBuildingData& BuildingData);
+    void RemoveFromCurrentBuildingData(const FBuildingData& BuildingData);
+
 
 protected:
 	UPROPERTY(EditDefaultsOnly)
@@ -107,6 +117,7 @@ protected:
 	UE5Coro::TCoroutine<> Coroutine = UE5Coro::TCoroutine<>::CompletedCoroutine;
 	FDrawToRenderTargetContext RenderContext;
 	TArray<FBuildingData> CurrentBuildingData;
+    TQuadTree<FBuildingData> CurrentBuildingQuadTree;
 
 	bool IsPendingRedraw = false;
 	TArray<FBuildingData> PendingAddBuildingData;
