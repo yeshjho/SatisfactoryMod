@@ -5,8 +5,8 @@ from glob import glob
 MAIN_ALPHA = int(255 * 0.75)
 OUTLINE_ALPHA = int(255 * 0.9)
 
-OUT_DIR = 'output'
-PRESET_DIR = 'presets'
+OUT_DIR = 'output/foundations'
+PRESET_DIR = 'foundation_presets'
 
 
 COLORS = (
