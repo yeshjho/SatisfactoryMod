@@ -122,4 +122,6 @@ protected:
 	bool IsPendingRedraw = false;
 	TArray<FBuildingData> PendingAddBuildingData;
 	TArray<FBuildingData> PendingRemoveBuildingData;
+
+	FBox2D UpdateArea;
 };

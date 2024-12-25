@@ -366,6 +366,10 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 		{
 	        CARTO_LOG(TEXT("AddedBuilding: %s"), *AddedBuildingData.BuildableClass->GetName());
             AddToCurrentBuildingData(AddedBuildingData);
+            if (const auto Bound = GetBuildableBounds(AddedBuildingData))
+            {
+                UpdateArea += *Bound;
+            }
 			co_await Budget;
 		}
 
@@ -373,6 +377,10 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 	    {
 	        CARTO_LOG(TEXT("RemovedBuilding: %s"), *RemovedBuildingData.BuildableClass->GetName());
             RemoveFromCurrentBuildingData(RemovedBuildingData);
+			if (const auto Bound = GetBuildableBounds(RemovedBuildingData))
+			{
+                UpdateArea += *Bound;
+            }
 	        co_await Budget;
 	    }
 
@@ -387,7 +395,17 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 	FVector2D Size;
 	UKismetRenderingLibrary::BeginDrawCanvasToRenderTarget(this, RenderTarget, Canvas, Size, RenderContext);
 
-	clear_render_target_portion(Canvas, FBox2D{ { WEST_BOUND_CENTIMETERS, NORTH_BOUND_CENTIMETERS }, { EAST_BOUND_CENTIMETERS, SOUTH_BOUND_CENTIMETERS } });
+	TArray<FBuildingData> BuildingsToRedraw;
+	if (IsInitializing)
+	{
+		clear_render_target_portion(Canvas, FBox2D{ { WEST_BOUND_CENTIMETERS, NORTH_BOUND_CENTIMETERS }, { EAST_BOUND_CENTIMETERS, SOUTH_BOUND_CENTIMETERS } });
+	}
+	else
+	{
+		clear_render_target_portion(Canvas, UpdateArea);
+		CurrentBuildingQuadTree.GetElements(UpdateArea, BuildingsToRedraw);
+	}
+	const TArray<FBuildingData>& BuildingsToDraw = IsInitializing ? CurrentBuildingData : BuildingsToRedraw;
 
 	FCartograph_ConfigStruct ConfigInstance = FCartograph_ConfigStruct::GetActiveConfig(GetWorld());
     for (auto& [_, SplineData] : BuildableSplineDataMap)
@@ -400,8 +418,8 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
         }
 		SplineData.SparsityCached = *Property->ContainerPtrToValuePtr<int>(&ConfigInstance);
     }
-
-	for (const auto& [Buildable, BoundingBox, BuildableClass, Transform, _] : CurrentBuildingData)
+    // TODO: Stencil subsequent draws to UpdateArea if not initializing
+	for (const auto& [Buildable, BoundingBox, BuildableClass, Transform, _] : BuildingsToDraw)
 	{
 		CARTO_LOG(TEXT("Buildable: %s, Transform: %s"), *BuildableClass->GetName(), *Transform.ToString());
 
@@ -510,6 +528,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 		co_await Budget;
 	}
 
+	UpdateArea = {};
 	IsInitializing = false;
 
 	CARTO_LOG(TEXT("RedrawMapCoroutine Finished"));
