@@ -381,12 +381,10 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
             const FSplineData* SplineData = BuildableSplineDataMap.Find(BuildableClass.Get());
 			if (!SplineData || !Buildable.IsValid())
 			{
-				UE_LOG(LogCartograph, Warning, TEXT("Buildable Not Valid"));
 				continue;
 			}
 
             const auto* SplineBuildable = Cast<IFGSplineBuildableInterface>(Buildable.Get());
-            UE_LOG(LogCartograph, Warning, TEXT("GetSplineComponent"));
 			USplineComponent* SplineComponent = SplineBuildable->GetSplineComponent();
 
 			const int SplinePointCount = SplineComponent->SplineCurves.ReparamTable.Points.Num();
