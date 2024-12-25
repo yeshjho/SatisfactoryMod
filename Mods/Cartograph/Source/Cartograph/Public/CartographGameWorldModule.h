@@ -22,7 +22,7 @@ DECLARE_LOG_CATEGORY_EXTERN(LogCartograph, Display, All);
 
 struct FBuildingData
 {
-    AFGBuildable* Buildable;  // nullptr for LightweightBuildables. Make sure to check IsValid(Buildable) before using it.
+    TWeakObjectPtr<AFGBuildable> Buildable;  // nullptr for LightweightBuildables.
     TSubclassOf<AFGBuildable> BuildableClass;
 	FTransform Transform;
 	FFactoryCustomizationData CustomizationData;
@@ -50,10 +50,6 @@ struct FSplineData
 };
 
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnInitializationStarted);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnInitializationFinished);
-
-
 /**
  * 
  */
@@ -71,13 +67,6 @@ private:
 	UE5Coro::TCoroutine<> RedrawMapCoroutine(TArray<FBuildingData> AddedBuildings, TArray<FBuildingData> RemovedBuildings, FForceLatentCoroutine = {});
 
 	void OnCoroutineFinishedOrCancelled();
-
-
-public:
-	UPROPERTY(BlueprintAssignable)
-    FOnInitializationStarted OnInitializationStarted;
-	UPROPERTY(BlueprintAssignable)
-    FOnInitializationFinished OnInitializationFinished;
 
 protected:
 	UPROPERTY(EditDefaultsOnly)

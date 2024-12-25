@@ -224,8 +224,6 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
 {
 	CARTO_LOG(TEXT("InitialBuildableGather Started"));
 
-    OnInitializationStarted.Broadcast();
-
 	CurrentBuildingData.Empty(Factories.Num() + Buildings.Num());
 
 	UKismetRenderingLibrary::ClearRenderTarget2D(this, RenderTarget, { 0, 0, 0, 0 });
@@ -233,9 +231,9 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
 	const float TimeBudget = FCartograph_ConfigStruct::GetActiveConfig(GetWorld()).InitializeTimeBudget;
 	UE5Coro::Latent::FTickTimeBudget Budget = UE5Coro::Latent::FTickTimeBudget::Milliseconds(TimeBudget);
 
-	for (auto* Object : Factories)
+	for (AFGBuildable* Object : Factories)
 	{
-		if (!Object->IsA<AFGBuildable>())
+		if (!IsValid(Object) || !Object->IsA<AFGBuildable>())
 		{
 			continue;
 		}
@@ -274,8 +272,6 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
 	}
 
 	CARTO_LOG(TEXT("InitialBuildableGather Finished"));
-
-    OnInitializationFinished.Broadcast();
 
 	IsInitializing = false;
 	IsPendingRedraw = false;
@@ -383,12 +379,14 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 		if (BuildableClass->ImplementsInterface(UFGSplineBuildableInterface::StaticClass()))
 		{
             const FSplineData* SplineData = BuildableSplineDataMap.Find(BuildableClass.Get());
-			if (!SplineData || !IsValid(Buildable))
+			if (!SplineData || !Buildable.IsValid())
 			{
+				UE_LOG(LogCartograph, Warning, TEXT("Buildable Not Valid"));
 				continue;
 			}
 
-            const auto* SplineBuildable = Cast<IFGSplineBuildableInterface>(Buildable);
+            const auto* SplineBuildable = Cast<IFGSplineBuildableInterface>(Buildable.Get());
+            UE_LOG(LogCartograph, Warning, TEXT("GetSplineComponent"));
 			USplineComponent* SplineComponent = SplineBuildable->GetSplineComponent();
 
 			const int SplinePointCount = SplineComponent->SplineCurves.ReparamTable.Points.Num();
@@ -428,10 +426,12 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 					// LineItem.BlendMode = FCanvas::BlendToSimpleElementBlend
 					Canvas->DrawItem(LineItem);
 
-					co_await Budget;
+					// Not co_awaiting here because the Buildable and SplineComponent might become invalid after resuming.
+                    // I could copy the relevant data, but let's hope it doesn't take too long.
 				}
 			}
 
+			co_await Budget;
 			continue;
 		}
 
