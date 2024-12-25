@@ -11,10 +11,10 @@
 #include "CartographGameWorldModule.generated.h"
 
 
-class UCanvasRenderTarget2D;
-
 class AFGBuildable;
 class AFGLightweightBuildableSubsystem;
+class UCanvasRenderTarget2D;
+class UFGBuildCategory;
 
 
 DECLARE_LOG_CATEGORY_EXTERN(LogCartograph, Display, All);
@@ -29,6 +29,22 @@ struct FBuildingData
 
 	bool operator==(const FBuildingData& Other) const noexcept;
 	auto operator<=>(const FBuildingData& Other) const noexcept;
+};
+
+
+USTRUCT()
+struct FCategoryData
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditDefaultsOnly)
+	FLinearColor MainColor;
+
+	UPROPERTY(EditDefaultsOnly)
+	FLinearColor OutlineColor;
+
+	UPROPERTY(EditDefaultsOnly)
+	float OutlineThickness;
 };
 
 
@@ -81,12 +97,22 @@ private:
 
 	void OnCoroutineFinishedOrCancelled();
 
+
 protected:
 	UPROPERTY(EditDefaultsOnly)
-    TMap<TSoftClassPtr<AFGBuildable>, TSoftObjectPtr<UTexture2D>> BuildableToIconMap;
+	TMap<TSoftClassPtr<UFGBuildCategory>, FCategoryData> BuildCategoryDataMap;
 
 	UPROPERTY(EditDefaultsOnly)
-	TMap<TSoftClassPtr<AFGBuildable>, FVector> BuildableSizeMap;
+	TMap<TSoftClassPtr<AFGBuildable>, FCategoryData> BuildableBuildCategoryDataOverrideMap;
+
+	UPROPERTY(EditDefaultsOnly)
+	TMap<TSoftClassPtr<UFGFactoryCustomizationDescriptor_Material>, FCategoryData> MaterialBuildCategoryDataOverrideMap;
+
+	UPROPERTY(EditDefaultsOnly)
+	TMap<TSoftClassPtr<AFGBuildable>, TSoftObjectPtr<UTexture2D>> BuildableIconOverrideMap;
+
+	UPROPERTY(EditDefaultsOnly)
+	TMap<TSoftClassPtr<AFGBuildable>, FVector2D> BuildableSizeOverrideMap;
 
 	UPROPERTY(EditDefaultsOnly)
 	TMap<TSoftClassPtr<AFGBuildable>, FRotator> BuildableExtraRotationMap;
@@ -99,6 +125,7 @@ protected:
 
 	UPROPERTY(EditDefaultsOnly)
 	TObjectPtr<UCanvasRenderTarget2D> RenderTarget;
+
 
 	bool ShouldInitialize = false;
 	UPROPERTY(BlueprintReadOnly)

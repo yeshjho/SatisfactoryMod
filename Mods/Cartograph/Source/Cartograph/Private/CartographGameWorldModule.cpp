@@ -6,9 +6,12 @@
 
 #include "FGLightweightBuildableSubsystem.h"
 #include "FGBuildable.h"
-#include "FGBuildableFoundation.h"
 #include "FGBuildableSubsystem.h"
 #include "FGBuildableWire.h"
+#include "FGBuildingDescriptor.h"
+#include "FGBuildCategory.h"
+#include "FGBuildSubCategory.h"
+#include "FGRecipeManager.h"
 #include "FGSaveSession.h"
 #include "FGSplineBuildableInterface.h"
 
@@ -36,7 +39,11 @@ constexpr bool ENABLE_LOG = false;
 #define CARTO_LOG(...) if constexpr (ENABLE_LOG) UE_LOG(LogCartograph, Display, __VA_ARGS__)
 
 
-FVector2D world_position_to_screen_position(const FVector& WorldPosition, const FVector& Size)
+template<typename T, typename U>
+    requires
+		(std::is_same_v<T, FVector> || std::is_same_v<T, FVector2D>) &&
+		(std::is_same_v<U, FVector> || std::is_same_v<U, FVector2D>)
+FVector2D world_position_to_screen_position(const T& WorldPosition, const U& Size)
 {
 	return FVector2D{
 		// TODO: Width / 2 & Height / 2: Only verified for foundations
@@ -375,8 +382,8 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 	co_await UE5Coro::Latent::NextTick();
 
 	UCanvas* Canvas = nullptr;
-	FVector2D Size;
-	UKismetRenderingLibrary::BeginDrawCanvasToRenderTarget(this, RenderTarget, Canvas, Size, RenderContext);
+	FVector2D _;
+	UKismetRenderingLibrary::BeginDrawCanvasToRenderTarget(this, RenderTarget, Canvas, _, RenderContext);
 
 	FCartograph_ConfigStruct ConfigInstance = FCartograph_ConfigStruct::GetActiveConfig(GetWorld());
     for (auto& [_, SplineData] : BuildableSplineDataMap)
@@ -390,7 +397,9 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 		SplineData.SparsityCached = *Property->ContainerPtrToValuePtr<int>(&ConfigInstance);
     }
 
-	for (const auto& [Buildable, BuildableClass, Transform, _] : CurrentBuildingData)
+	const AFGRecipeManager* RecipeManager = AFGRecipeManager::Get(GetWorld());
+
+	for (const auto& [Buildable, BuildableClass, Transform, CustomizationData] : CurrentBuildingData)
 	{
 		CARTO_LOG(TEXT("Buildable: %s, Transform: %s"), *BuildableClass->GetName(), *Transform.ToString());
 
@@ -456,53 +465,113 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
             co_await Budget;
         }
 
-		const TSoftObjectPtr<UTexture2D>* Texture = BuildableToIconMap.Find(BuildableClass.Get());
-		if (!Texture || Texture->IsNull())
-		{
-			continue;
-		}
 
-		FVector BuildableSize = Transform.GetScale3D();
-		if (const FVector* GivenSize = BuildableSizeMap.Find(BuildableClass.Get()))
+		FVector2D* Size = BuildableSizeOverrideMap.Find(BuildableClass.Get());
+		if (!Size)
 		{
-            BuildableSize *= *GivenSize;
+			const FBox ClearanceBox = Cast<AFGBuildable>(BuildableClass->ClassDefaultObject)->GetCombinedClearanceBox();
+			if (!ClearanceBox.IsValid)
+			{
+				continue;
+			}
+
+			FVector2D ClearanceBoxSize{ ClearanceBox.GetSize() };
+			Size = &ClearanceBoxSize;
 		}
-		else if (BuildableClass->IsChildOf(AFGBuildableFoundation::StaticClass()))
+		*Size *= FVector2D{ Transform.GetScale3D() };
+		const FVector2D ScreenPosition = world_position_to_screen_position(Transform.GetLocation(), *Size);
+		const FRotator* ExtraRotation = BuildableExtraRotationMap.Find(BuildableClass.Get());
+
+		if (const TSoftObjectPtr<UTexture2D>* Texture = BuildableIconOverrideMap.Find(BuildableClass.Get());
+			Texture && !Texture->IsNull())
 		{
-			const AFGBuildableFoundation* Foundation = Cast<AFGBuildableFoundation>(BuildableClass->ClassDefaultObject);
-            BuildableSize *= { Foundation->mWidth, Foundation->mDepth, Foundation->mHeight };
+			const UTexture2D* LoadedTexture = Texture->Get();
+			if (!LoadedTexture)
+			{
+				LoadedTexture = co_await UE5Coro::Latent::AsyncLoadObject(*Texture);
+			}
+
+			FCanvasTileItem TileItem{
+				ScreenPosition,
+				LoadedTexture->GetResource(),
+				{ Size->X * PIXEL_PER_CENTIMETER[0], Size->Y * PIXEL_PER_CENTIMETER[1] },
+				{ 0, 0 },
+				{ 1, 1 },
+				FLinearColor::White
+			};
+			TileItem.PivotPoint = { 0.5, 0.5 };
+			TileItem.BlendMode = FCanvas::BlendToSimpleElementBlend(EBlendMode::BLEND_Translucent);
+			TileItem.Rotation = Transform.GetRotation().Rotator();
+			if (ExtraRotation)
+			{
+				TileItem.Rotation += *ExtraRotation;
+			}
+
+			Canvas->DrawItem(TileItem);
 		}
 		else
 		{
-			continue;
+            const FCategoryData* CategoryData = BuildableBuildCategoryDataOverrideMap.Find(BuildableClass.Get());
+			if (!CategoryData)
+			{
+				CategoryData = MaterialBuildCategoryDataOverrideMap.Find(CustomizationData.MaterialDesc.Get());
+			}
+			if (!CategoryData)
+			{
+				const TSubclassOf<UFGBuildingDescriptor> Descriptor = RecipeManager->FindBuildingDescriptorByClass(BuildableClass);
+				if (TArray<TSubclassOf<UFGCategory>> Subcategories = UFGItemDescriptor::GetSubCategoriesOfClass(Descriptor, UFGBuildSubCategory::StaticClass());
+					!Subcategories.IsEmpty())
+                {
+                    CategoryData = BuildCategoryDataMap.Find(Subcategories[0].Get());
+                }
+				if (!CategoryData)
+				{
+					const TSubclassOf<UFGBuildCategory> Category = UFGBuildingDescriptor::GetBuildCategory(Descriptor);
+					CategoryData = BuildCategoryDataMap.Find(Category.Get());
+				}
+			}
+			if (!CategoryData)
+			{
+				continue;
+			}
+
+			FCanvasTileItem TileItem{
+				ScreenPosition,
+				{ Size->X * PIXEL_PER_CENTIMETER[0], Size->Y * PIXEL_PER_CENTIMETER[1] },
+				CategoryData->MainColor
+			};
+			TileItem.PivotPoint = { 0.5, 0.5 };
+			TileItem.BlendMode = FCanvas::BlendToSimpleElementBlend(EBlendMode::BLEND_Translucent);
+			TileItem.Rotation = Transform.GetRotation().Rotator();
+			if (ExtraRotation)
+			{
+				TileItem.Rotation += *ExtraRotation;
+			}
+
+			Canvas->DrawItem(TileItem);
+			co_await Budget;
+
+			const float HalfWidth = Size->X / 2;
+			const float HalfHeight = Size->Y / 2;
+			FVector LocalCorners[] = {
+				{ -HalfWidth, -HalfHeight, 0 },
+				{ HalfWidth, -HalfHeight, 0 },
+				{ HalfWidth,  HalfHeight, 0 },
+				{ -HalfWidth,  HalfHeight, 0 },
+			};
+
+			FTransform TransformNoScale = Transform;
+            TransformNoScale.SetScale3D(FVector::OneVector);
+			for (FVector& Corner : LocalCorners)
+			{
+				Corner = TransformNoScale.TransformPosition(Corner);
+			}
+
+            draw_line(Canvas, LocalCorners[0], LocalCorners[1], CategoryData->OutlineColor, CategoryData->OutlineThickness);
+            draw_line(Canvas, LocalCorners[1], LocalCorners[2], CategoryData->OutlineColor, CategoryData->OutlineThickness);
+            draw_line(Canvas, LocalCorners[2], LocalCorners[3], CategoryData->OutlineColor, CategoryData->OutlineThickness);
+            draw_line(Canvas, LocalCorners[3], LocalCorners[0], CategoryData->OutlineColor, CategoryData->OutlineThickness);
 		}
-
-		const UTexture2D* LoadedTexture = Texture->Get();
-		if (!LoadedTexture)
-		{
-			LoadedTexture = co_await UE5Coro::Latent::AsyncLoadObject(*Texture);
-		}
-
-		const FVector2D ScreenPosition = world_position_to_screen_position(Transform.GetLocation(), BuildableSize);
-		FCanvasTileItem TileItem{
-			ScreenPosition,
-			LoadedTexture->GetResource(),
-			{ BuildableSize.X * PIXEL_PER_CENTIMETER[0], BuildableSize.Y * PIXEL_PER_CENTIMETER[1] },
-			{ 0, 0 },
-			{ 1, 1 },
-			FLinearColor::White
-		};
-
-		TileItem.Rotation = Transform.GetRotation().Rotator();
-		TileItem.PivotPoint = { 0.5, 0.5 };
-		TileItem.BlendMode = FCanvas::BlendToSimpleElementBlend(EBlendMode::BLEND_Translucent);
-
-		if (const FRotator* Extra = BuildableExtraRotationMap.Find(BuildableClass.Get()))
-        {
-            TileItem.Rotation += *Extra;
-        }
-
-		Canvas->DrawItem(TileItem);
 
 		co_await Budget;
 	}
