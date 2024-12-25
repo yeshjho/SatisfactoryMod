@@ -96,8 +96,11 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 					ShouldInitialize = false;
 					IsInitializing = true;
 
+                    TArray<TWeakObjectPtr<AFGBuildable>> Factories;
+                    Algo::Transform(AFGBuildableSubsystem::Get(Instance)->GetAllBuildablesRef(), Factories, 
+						[](AFGBuildable* Buildable) { return Buildable; });
 					Coroutine = InitialBuildableGather(
-						AFGBuildableSubsystem::Get(Instance)->GetAllBuildablesRef(),
+						std::move(Factories),
                         AFGLightweightBuildableSubsystem::Get(Instance)->mBuildableClassToInstanceArray
 					);
 				});
@@ -237,7 +240,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 
 // Factories/Buildings: Intentional copies
 UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
-	TArray<AFGBuildable*> Factories, TMap<TSubclassOf<AFGBuildable>, TArray<FRuntimeBuildableInstanceData>> Buildings, FForceLatentCoroutine)
+	TArray<TWeakObjectPtr<AFGBuildable>> Factories, TMap<TSubclassOf<AFGBuildable>, TArray<FRuntimeBuildableInstanceData>> Buildings, FForceLatentCoroutine)
 {
 	CARTO_LOG(TEXT("InitialBuildableGather Started"));
 
@@ -248,20 +251,18 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
 	const float TimeBudget = FCartograph_ConfigStruct::GetActiveConfig(GetWorld()).InitializeTimeBudget;
 	UE5Coro::Latent::FTickTimeBudget Budget = UE5Coro::Latent::FTickTimeBudget::Milliseconds(TimeBudget);
 
-	for (AFGBuildable* Object : Factories)
+	for (const TWeakObjectPtr<AFGBuildable>& Factory : Factories)
 	{
-		if (!IsValid(Object) || !Object->IsA<AFGBuildable>())
+		if (!Factory.IsValid())
 		{
 			continue;
 		}
-
-		auto* Buildable = Cast<AFGBuildable>(Object);
-
+		
 		FBuildingData NewBuildingData{
-            .Buildable = Buildable,
-			.BuildableClass = Buildable->GetClass(),
-			.Transform = Buildable->GetTransform(),
-            .CustomizationData = Buildable->GetCustomizationData_Native(),
+            .Buildable = Factory,
+			.BuildableClass = Factory->GetClass(),
+			.Transform = Factory->GetTransform(),
+            .CustomizationData = Factory->GetCustomizationData_Native(),
 		};
 
 		const int32 Pos = Algo::LowerBound(CurrentBuildingData, NewBuildingData);
