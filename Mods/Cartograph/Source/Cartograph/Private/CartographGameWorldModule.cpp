@@ -6,6 +6,7 @@
 
 #include "FGLightweightBuildableSubsystem.h"
 #include "FGBuildable.h"
+#include "FGBuildableBeam.h"
 #include "FGBuildableSubsystem.h"
 #include "FGBuildableWire.h"
 #include "FGBuildingDescriptor.h"
@@ -35,7 +36,7 @@ constexpr double PIXEL_PER_CENTIMETER[] = { RENDER_TEXTURE_SIZE / MAP_WIDTH_CENT
 DEFINE_LOG_CATEGORY(LogCartograph);
 
 
-constexpr bool ENABLE_DEBUG_LOG = true;
+constexpr bool ENABLE_DEBUG_LOG = false;
 #define CARTO_LOG_DEBUG(...) if constexpr (ENABLE_DEBUG_LOG) UE_LOG(LogCartograph, Display, __VA_ARGS__)
 
 
@@ -421,8 +422,19 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 
 		if (BuildableClass->ImplementsInterface(UFGSplineBuildableInterface::StaticClass()))
 		{
+			if (!Buildable.IsValid())
+			{
+				continue;
+			}
+
             const FSplineData* SplineData = BuildableSplineDataMap.Find(BuildableClass.Get());
-			if (!SplineData || !Buildable.IsValid())
+			if (!SplineData)
+			{
+                UE_LOG(LogCartograph, Warning, TEXT("Can't find spline data for %s"), *BuildableClass->GetName());
+				continue;
+			}
+
+			if (SplineData->Thickness < 0)
 			{
 				continue;
 			}
@@ -467,11 +479,22 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 
 		if (BuildableClass->IsChildOf(AFGBuildableWire::StaticClass()))
         {
+			if (!Buildable.IsValid())
+			{
+				continue;
+			}
+
             const FWireData* WireData = BuildableWireDataMap.Find(BuildableClass.Get());
-            if (!WireData || !Buildable.IsValid())
+            if (!WireData)
             {
+                UE_LOG(LogCartograph, Warning, TEXT("Can't find wire data for %s"), *BuildableClass->GetName());
                 continue;
             }
+
+			if (WireData->Thickness < 0)
+			{
+				continue;
+			}
 
             const auto* Wire = Cast<AFGBuildableWire>(Buildable);
             const FVector Start = Wire->GetConnectionLocation(0);
@@ -481,6 +504,30 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
             co_await Budget;
 			continue;
         }
+
+		if (BuildableClass->IsChildOf(AFGBuildableBeam::StaticClass()))
+		{
+			if (!Buildable.IsValid())
+			{
+				continue;
+			}
+
+			const FWireData* BeamData = BuildableWireDataMap.Find(BuildableClass.Get());
+			if (!BeamData)
+			{
+                UE_LOG(LogCartograph, Warning, TEXT("Can't find beam data for %s"), *BuildableClass->GetName());
+				continue;
+			}
+
+			const auto* Beam = Cast<AFGBuildableBeam>(Buildable);
+            const float Length = Beam->GetLength();
+			const FVector Start = Transform.GetLocation();
+            const FVector End = Start + Transform.GetRotation().Vector() * Length;
+			draw_line(Canvas, Start, End, BeamData->Color, BeamData->Thickness);
+
+            co_await Budget;
+			continue;
+		}
 
 
 		FVector2D* Size = BuildableSizeOverrideMap.Find(BuildableClass.Get());
