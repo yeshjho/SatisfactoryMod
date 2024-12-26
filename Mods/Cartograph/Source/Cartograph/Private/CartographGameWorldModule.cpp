@@ -35,8 +35,8 @@ constexpr double PIXEL_PER_CENTIMETER[] = { RENDER_TEXTURE_SIZE / MAP_WIDTH_CENT
 DEFINE_LOG_CATEGORY(LogCartograph);
 
 
-constexpr bool ENABLE_LOG = false;
-#define CARTO_LOG(...) if constexpr (ENABLE_LOG) UE_LOG(LogCartograph, Display, __VA_ARGS__)
+constexpr bool ENABLE_DEBUG_LOG = true;
+#define CARTO_LOG_DEBUG(...) if constexpr (ENABLE_DEBUG_LOG) UE_LOG(LogCartograph, Display, __VA_ARGS__)
 
 
 template<typename T, typename U>
@@ -92,6 +92,19 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
     }
 
 
+	for (const auto& [Material, CategoryData] : MaterialBuildCategoryDataOverrideMap)
+	{
+		for (const auto& [_, Recipe] : Cast<UFGFactoryCustomizationDescriptor_Material>(Material->ClassDefaultObject)->GetBuildableMap())
+		{
+			TSubclassOf<AFGBuildable> Buildable = Cast<UFGBuildingDescriptor>(UFGRecipe::GetDescriptorForRecipe(Recipe)->ClassDefaultObject)->mBuildableClass;
+			if (!BuildableBuildCategoryDataOverrideMap.Contains(Buildable.Get()))
+			{
+				BuildableBuildCategoryDataOverrideMap.Add(Buildable.Get(), CategoryData);
+			}
+		}
+	}
+
+
 	const auto LambdaAfterLoadGame =
 		[this](bool ReturnValue, UFGSaveSession* Instance, const FString& SaveName)
 		{
@@ -124,7 +137,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 				return;
 			}
 
-			CARTO_LOG(TEXT("AddFromBuildableInstanceData: %s"), *BuildableClass->GetName());
+			CARTO_LOG_DEBUG(TEXT("AddFromBuildableInstanceData: %s"), *BuildableClass->GetName());
 
 			PendingAddBuildingData.Add(
 				{
@@ -148,7 +161,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 				return;
 			}
 
-			CARTO_LOG(TEXT("AddFromReplicatedData: %s"), *BuildableClass->GetName());
+			CARTO_LOG_DEBUG(TEXT("AddFromReplicatedData: %s"), *BuildableClass->GetName());
 
 			PendingAddBuildingData.Add(
 				{
@@ -170,7 +183,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 				return;
 			}
 
-			CARTO_LOG(TEXT("AddBuildable: %s"), *Buildable->GetClass()->GetName());
+			CARTO_LOG_DEBUG(TEXT("AddBuildable: %s"), *Buildable->GetClass()->GetName());
 
 			PendingAddBuildingData.Add(
 				{
@@ -192,7 +205,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 				return;
 			}
 
-			CARTO_LOG(TEXT("InvalidateRuntimeInstanceDataForIndex: %s"), *BuildableClass->GetName());
+			CARTO_LOG_DEBUG(TEXT("InvalidateRuntimeInstanceDataForIndex: %s"), *BuildableClass->GetName());
 
 			const FRuntimeBuildableInstanceData* Data = Instance->GetRuntimeDataForBuildableClassAndIndex(BuildableClass, Index);
 
@@ -216,7 +229,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 				return;
 			}
 
-			CARTO_LOG(TEXT("RemoveBuildable: %s"), *Buildable->GetClass()->GetName());
+			CARTO_LOG_DEBUG(TEXT("RemoveBuildable: %s"), *Buildable->GetClass()->GetName());
 
 			PendingRemoveBuildingData.Add(
 				{
@@ -249,7 +262,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
 	TArray<TWeakObjectPtr<AFGBuildable>> Factories, TMap<TSubclassOf<AFGBuildable>, TArray<FRuntimeBuildableInstanceData>> Buildings, FForceLatentCoroutine)
 {
-	CARTO_LOG(TEXT("InitialBuildableGather Started"));
+	CARTO_LOG_DEBUG(TEXT("InitialBuildableGather Started"));
 
 	CurrentBuildingData.Empty(Factories.Num() + Buildings.Num());
 
@@ -296,7 +309,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
 		}
 	}
 
-	CARTO_LOG(TEXT("InitialBuildableGather Finished"));
+	CARTO_LOG_DEBUG(TEXT("InitialBuildableGather Finished"));
 
 	IsInitializing = false;
 	IsPendingRedraw = false;
@@ -312,7 +325,7 @@ void UCartographGameInstanceModule::RedrawMap()
 	{
 		if (!IsInitializing)
 		{
-			CARTO_LOG(TEXT("RedrawMapCoroutine Cancel Requested"));
+			CARTO_LOG_DEBUG(TEXT("RedrawMapCoroutine Cancel Requested"));
 			Coroutine.Cancel();
 		}
 		IsPendingRedraw = true;
@@ -335,7 +348,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
         OnCoroutineFinishedOrCancelled();
 	};
 
-	CARTO_LOG(TEXT("RedrawMapCoroutine Started"));
+	CARTO_LOG_DEBUG(TEXT("RedrawMapCoroutine Started"));
 
 	const float TimeBudget = FCartograph_ConfigStruct::GetActiveConfig(GetWorld()).RedrawTimeBudget;
 	UE5Coro::Latent::FTickTimeBudget Budget = UE5Coro::Latent::FTickTimeBudget::Milliseconds(TimeBudget);
@@ -345,7 +358,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 
 		for (FBuildingData& AddedBuildingData : AddedBuildings)
 		{
-	        CARTO_LOG(TEXT("AddedBuilding: %s"), *AddedBuildingData.BuildableClass->GetName());
+	        CARTO_LOG_DEBUG(TEXT("AddedBuilding: %s"), *AddedBuildingData.BuildableClass->GetName());
 
 			const int32 Pos = Algo::LowerBound(CurrentBuildingData, AddedBuildingData);
 			CurrentBuildingData.Insert(std::move(AddedBuildingData), Pos);
@@ -355,7 +368,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 
 	    for (const FBuildingData& RemovedBuildingData : RemovedBuildings)
 	    {
-	        CARTO_LOG(TEXT("RemovedBuilding: %s"), *RemovedBuildingData.BuildableClass->GetName());
+	        CARTO_LOG_DEBUG(TEXT("RemovedBuilding: %s"), *RemovedBuildingData.BuildableClass->GetName());
 
 	        const int32 Start = Algo::LowerBound(CurrentBuildingData, RemovedBuildingData);
 	        const int32 End = Algo::UpperBound(CurrentBuildingData, RemovedBuildingData);
@@ -372,7 +385,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 	        co_await Budget;
 	    }
 
-        CARTO_LOG(TEXT("Buildings Change Processed"));
+        CARTO_LOG_DEBUG(TEXT("Buildings Change Processed"));
 	}
 
 	UKismetRenderingLibrary::ClearRenderTarget2D(this, RenderTarget, { 0, 0, 0, 0 });
@@ -399,9 +412,12 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 
 	const AFGRecipeManager* RecipeManager = AFGRecipeManager::Get(GetWorld());
 
-	for (const auto& [Buildable, BuildableClass, Transform, CustomizationData] : CurrentBuildingData)
+	for (const auto& [Buildable, OriginalBuildableClass, Transform, CustomizationData] : CurrentBuildingData)
 	{
-		CARTO_LOG(TEXT("Buildable: %s, Transform: %s"), *BuildableClass->GetName(), *Transform.ToString());
+		CARTO_LOG_DEBUG(TEXT("Buildable: %s, Transform: %s"), *OriginalBuildableClass->GetName(), *Transform.ToString());
+
+		TSoftClassPtr<AFGBuildable>* RedirectClass = BuildableClassRedirectMap.Find(OriginalBuildableClass.Get());
+        const TSubclassOf<AFGBuildable> BuildableClass = RedirectClass ? RedirectClass->Get() : OriginalBuildableClass.Get();
 
 		if (BuildableClass->ImplementsInterface(UFGSplineBuildableInterface::StaticClass()))
 		{
@@ -463,6 +479,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
             draw_line(Canvas, Start, End, WireData->Color, WireData->Thickness);
 
             co_await Budget;
+			continue;
         }
 
 
@@ -472,12 +489,17 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 			const FBox ClearanceBox = Cast<AFGBuildable>(BuildableClass->ClassDefaultObject)->GetCombinedClearanceBox();
 			if (!ClearanceBox.IsValid)
 			{
+                UE_LOG(LogCartograph, Warning, TEXT("Can't find size for %s"), *BuildableClass->GetName());
 				continue;
 			}
 
 			FVector2D ClearanceBoxSize{ ClearanceBox.GetSize() };
 			Size = &ClearanceBoxSize;
 		}
+        if (Size->X == 0.f || Size->Y == 0.f)
+        {
+            continue;
+        }
 		*Size *= FVector2D{ Transform.GetScale3D() };
 		const FVector2D ScreenPosition = world_position_to_screen_position(Transform.GetLocation(), *Size);
 		const FRotator* ExtraRotation = BuildableExtraRotationMap.Find(BuildableClass.Get());
@@ -514,16 +536,12 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
             const FCategoryData* CategoryData = BuildableBuildCategoryDataOverrideMap.Find(BuildableClass.Get());
 			if (!CategoryData)
 			{
-				CategoryData = MaterialBuildCategoryDataOverrideMap.Find(CustomizationData.MaterialDesc.Get());
-			}
-			if (!CategoryData)
-			{
 				const TSubclassOf<UFGBuildingDescriptor> Descriptor = RecipeManager->FindBuildingDescriptorByClass(BuildableClass);
 				if (TArray<TSubclassOf<UFGCategory>> Subcategories = UFGItemDescriptor::GetSubCategoriesOfClass(Descriptor, UFGBuildSubCategory::StaticClass());
 					!Subcategories.IsEmpty())
-                {
-                    CategoryData = BuildCategoryDataMap.Find(Subcategories[0].Get());
-                }
+				{
+					CategoryData = BuildCategoryDataMap.Find(Subcategories[0].Get());
+				}
 				if (!CategoryData)
 				{
 					const TSubclassOf<UFGBuildCategory> Category = UFGBuildingDescriptor::GetBuildCategory(Descriptor);
@@ -532,6 +550,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 			}
 			if (!CategoryData)
 			{
+				UE_LOG(LogCartograph, Warning, TEXT("Can't find category data for %s"), *BuildableClass->GetName());
 				continue;
 			}
 
@@ -567,22 +586,25 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 				Corner = TransformNoScale.TransformPosition(Corner);
 			}
 
-            draw_line(Canvas, LocalCorners[0], LocalCorners[1], CategoryData->OutlineColor, CategoryData->OutlineThickness);
-            draw_line(Canvas, LocalCorners[1], LocalCorners[2], CategoryData->OutlineColor, CategoryData->OutlineThickness);
-            draw_line(Canvas, LocalCorners[2], LocalCorners[3], CategoryData->OutlineColor, CategoryData->OutlineThickness);
-            draw_line(Canvas, LocalCorners[3], LocalCorners[0], CategoryData->OutlineColor, CategoryData->OutlineThickness);
+			if (CategoryData->OutlineThickness > 0)
+			{
+				draw_line(Canvas, LocalCorners[0], LocalCorners[1], CategoryData->OutlineColor, CategoryData->OutlineThickness);
+				draw_line(Canvas, LocalCorners[1], LocalCorners[2], CategoryData->OutlineColor, CategoryData->OutlineThickness);
+				draw_line(Canvas, LocalCorners[2], LocalCorners[3], CategoryData->OutlineColor, CategoryData->OutlineThickness);
+				draw_line(Canvas, LocalCorners[3], LocalCorners[0], CategoryData->OutlineColor, CategoryData->OutlineThickness);
+			}
 		}
 
 		co_await Budget;
 	}
 
-	CARTO_LOG(TEXT("RedrawMapCoroutine Finished"));
+	CARTO_LOG_DEBUG(TEXT("RedrawMapCoroutine Finished"));
 }
 
 
 void UCartographGameInstanceModule::OnCoroutineFinishedOrCancelled()
 {
-    CARTO_LOG(TEXT("OnCoroutineFinishedOrCancelled"));
+    CARTO_LOG_DEBUG(TEXT("OnCoroutineFinishedOrCancelled"));
 
     if (RenderContext.RenderTarget)
     {

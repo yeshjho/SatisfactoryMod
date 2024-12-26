@@ -106,7 +106,7 @@ protected:
 	TMap<TSoftClassPtr<AFGBuildable>, FCategoryData> BuildableBuildCategoryDataOverrideMap;
 
 	UPROPERTY(EditDefaultsOnly)
-	TMap<TSoftClassPtr<UFGFactoryCustomizationDescriptor_Material>, FCategoryData> MaterialBuildCategoryDataOverrideMap;
+	TMap<TSubclassOf<UFGFactoryCustomizationDescriptor_Material>, FCategoryData> MaterialBuildCategoryDataOverrideMap;
 
 	UPROPERTY(EditDefaultsOnly)
 	TMap<TSoftClassPtr<AFGBuildable>, TSoftObjectPtr<UTexture2D>> BuildableIconOverrideMap;
@@ -122,6 +122,9 @@ protected:
 
 	UPROPERTY(EditDefaultsOnly)
     TMap<TSoftClassPtr<AFGBuildable>, FWireData> BuildableWireDataMap;
+
+	UPROPERTY(EditDefaultsOnly)
+	TMap<TSoftClassPtr<AFGBuildable>, TSoftClassPtr<AFGBuildable>> BuildableClassRedirectMap;
 
 	UPROPERTY(EditDefaultsOnly)
 	TObjectPtr<UCanvasRenderTarget2D> RenderTarget;
