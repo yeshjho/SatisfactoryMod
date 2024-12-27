@@ -20,12 +20,25 @@ class UFGBuildCategory;
 DECLARE_LOG_CATEGORY_EXTERN(LogCartograph, Display, All);
 
 
+constexpr bool ENABLE_DEBUG_LOG = true;
+constexpr bool ENABLE_VERBOSE_LOG = false;
+#define CARTO_LOG_DEBUG(...) if constexpr (ENABLE_DEBUG_LOG) UE_LOG(LogCartograph, Display, __VA_ARGS__)
+#define CARTO_LOG_VERBOSE(...) if constexpr (ENABLE_VERBOSE_LOG) UE_LOG(LogCartograph, Display, __VA_ARGS__)
+
+
+USTRUCT()
 struct FBuildingData
 {
+	GENERATED_BODY()
+
+	UPROPERTY()
     TWeakObjectPtr<AFGBuildable> Buildable;  // nullptr for LightweightBuildables.
+	UPROPERTY()
     TSubclassOf<AFGBuildable> BuildableClass;
+	UPROPERTY()
 	FTransform Transform;
-	FFactoryCustomizationData CustomizationData;
+	//UPROPERTY()
+	//FFactoryCustomizationData CustomizationData;
 
 	bool operator==(const FBuildingData& Other) const noexcept;
 	auto operator<=>(const FBuildingData& Other) const noexcept;
@@ -87,10 +100,13 @@ class CARTOGRAPH_API UCartographGameInstanceModule : public UGameInstanceModule
 {
 	GENERATED_BODY()
 
+    friend class ACartographModSubsystem;
+	friend class UCartographRemoteCallObject;
+
 public:
 	virtual void DispatchLifecycleEvent(ELifecyclePhase Phase) override;
 
-	void OnWorldLoaded(UWorld* World);
+	void OnWorldLoaded();
 
 private:
 	UE5Coro::TCoroutine<> InitialBuildableGather(TArray<TWeakObjectPtr<AFGBuildable>> Factories, TMap<TSubclassOf<AFGBuildable>, TArray<FRuntimeBuildableInstanceData>> Buildings, FForceLatentCoroutine = {});
@@ -98,6 +114,8 @@ private:
 	UE5Coro::TCoroutine<> RedrawMapCoroutine(TArray<FBuildingData> AddedBuildings, TArray<FBuildingData> RemovedBuildings, FForceLatentCoroutine = {});
 
 	void OnCoroutineFinishedOrCancelled();
+
+	void ExecuteRedrawMapCoroutine();
 
 
 protected:
@@ -136,8 +154,6 @@ protected:
 	UPROPERTY(BlueprintReadOnly)
 	bool IsInitializing = false;
 
-	UWorld* WorldCached = nullptr;
-
 	UE5Coro::TCoroutine<> Coroutine = UE5Coro::TCoroutine<>::CompletedCoroutine;
 	FDrawToRenderTargetContext RenderContext;
 	TArray<FBuildingData> CurrentBuildingData;
@@ -145,4 +161,7 @@ protected:
 	bool IsPendingRedraw = false;
 	TArray<FBuildingData> PendingAddBuildingData;
 	TArray<FBuildingData> PendingRemoveBuildingData;
+
+
+    bool IsClient = false;
 };

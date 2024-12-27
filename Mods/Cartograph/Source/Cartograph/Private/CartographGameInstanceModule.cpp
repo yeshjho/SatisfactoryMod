@@ -1,7 +1,6 @@
 #include "CartographGameInstanceModule.h"
 
 #include "CanvasItem.h"
-#include "EngineUtils.h"
 #include "Engine/Canvas.h"
 #include "Engine/CanvasRenderTarget2D.h"
 
@@ -13,12 +12,15 @@
 #include "FGBuildingDescriptor.h"
 #include "FGBuildCategory.h"
 #include "FGBuildSubCategory.h"
+#include "FGPlayerController.h"
 #include "FGRecipeManager.h"
 #include "FGSaveSession.h"
 #include "FGSplineBuildableInterface.h"
 
 #include "Patching/NativeHookManager.h"
 
+#include "CartographModSubsystem.h"
+#include "CartographRemoteCallObject.h"
 #include "Cartograph_ConfigStruct.h"
 
 
@@ -35,10 +37,6 @@ constexpr double PIXEL_PER_CENTIMETER[] = { RENDER_TEXTURE_SIZE / MAP_WIDTH_CENT
 
 
 DEFINE_LOG_CATEGORY(LogCartograph);
-
-
-constexpr bool ENABLE_DEBUG_LOG = true;
-#define CARTO_LOG_DEBUG(...) if constexpr (ENABLE_DEBUG_LOG) UE_LOG(LogCartograph, Display, __VA_ARGS__)
 
 
 template<typename T, typename U>
@@ -105,7 +103,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 			}
 		}
 	}
-
+	
 
 	const auto LambdaAfterLoadGame =
 		[this](bool ReturnValue, UFGSaveSession* Instance, const FString& SaveName)
@@ -113,9 +111,9 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 			CARTO_LOG_DEBUG(TEXT("LoadGame"));
 
 			ShouldInitialize = true;
-			// Calling it at the same tick sometimes causes the coroutine to just disappear
-			WorldCached->GetTimerManager().SetTimerForNextTick(
-				[this]()
+            // Wait for ACartographModSubsystem to initialize
+			GetWorld()->GetTimerManager().SetTimerForNextTick(
+				[this, Instance]()
 				{
 					if (!ShouldInitialize)
 					{
@@ -126,11 +124,11 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 					IsInitializing = true;
 
 					TArray<TWeakObjectPtr<AFGBuildable>> Factories;
-					Algo::Transform(AFGBuildableSubsystem::Get(WorldCached)->GetAllBuildablesRef(), Factories,
+					Algo::Transform(AFGBuildableSubsystem::Get(Instance)->GetAllBuildablesRef(), Factories,
 						[](AFGBuildable* Buildable) { return Buildable; });
 					Coroutine = InitialBuildableGather(
 						std::move(Factories),
-						AFGLightweightBuildableSubsystem::Get(WorldCached)->mBuildableClassToInstanceArray
+						AFGLightweightBuildableSubsystem::Get(Instance)->mBuildableClassToInstanceArray
 					);
 				});
 		};
@@ -141,9 +139,9 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
             FRuntimeBuildableInstanceData& BuildableInstanceData, bool FromSaveData = false, int32 SaveDataBuildableIndex = INDEX_NONE, 
             uint16 ConstructId = MAX_uint16, AActor* BuildEffectInstigator = nullptr, int32 BlueprintBuildEffectIndex = INDEX_NONE)
         {
-			CARTO_LOG_DEBUG(TEXT("AddFromBuildableInstanceData: %s, Skip: %d"), *BuildableClass->GetName(), ShouldInitialize || FromSaveData);
+			CARTO_LOG_DEBUG(TEXT("AddFromBuildableInstanceData: %s, Skip: %d"), *BuildableClass->GetName(), ShouldInitialize || FromSaveData || IsClient);
 
-			if (ShouldInitialize || FromSaveData)
+			if (ShouldInitialize || FromSaveData || IsClient)
 			{
 				return;
 			}
@@ -153,10 +151,11 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
                     .Buildable = nullptr,
 					.BuildableClass = BuildableClass,
 					.Transform = BuildableInstanceData.Transform,
-					.CustomizationData = BuildableInstanceData.CustomizationData,
+					//.CustomizationData = BuildableInstanceData.CustomizationData,
 				}
 			);
-        	RedrawMap();
+
+			RedrawMap();
         };
 
 
@@ -165,9 +164,9 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 			const FLightweightBuildableReplicationItem& ReplicationData, int32 MaxSize, 
 			AActor* BuildEffectInstigator, int32 BlueprintBuildIndex)
 		{
-			CARTO_LOG_DEBUG(TEXT("AddFromReplicatedData: %s, Skip: %d"), *BuildableClass->GetName(), ShouldInitialize);
+			CARTO_LOG_DEBUG(TEXT("AddFromReplicatedData: %s, Skip: %d"), *BuildableClass->GetName(), ShouldInitialize || IsClient);
 
-			if (ShouldInitialize)
+			if (ShouldInitialize || IsClient)
 			{
 				return;
 			}
@@ -177,9 +176,10 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 					.Buildable = nullptr,
 					.BuildableClass = BuildableClass,
 					.Transform = ReplicationData.Transform,
-					.CustomizationData = ReplicationData.CustomizationData,
+					//.CustomizationData = ReplicationData.CustomizationData,
 				}
 			);
+
 			RedrawMap();
 		};
 
@@ -187,9 +187,9 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 	const auto LambdaAfterAddBuildable =
 		[this](AFGBuildableSubsystem* Instance, AFGBuildable* Buildable)
 		{
-			CARTO_LOG_DEBUG(TEXT("AddBuildable: %s, Skip: %d"), *Buildable->GetClass()->GetName(), ShouldInitialize);
+			CARTO_LOG_DEBUG(TEXT("AddBuildable: %s, Skip: %d"), *Buildable->GetClass()->GetName(), ShouldInitialize || IsClient);
 
-			if (ShouldInitialize)
+			if (ShouldInitialize || IsClient)
 			{
 				return;
 			}
@@ -199,9 +199,10 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
                     .Buildable = Buildable,
 					.BuildableClass = Buildable->GetClass(),
 					.Transform = Buildable->GetTransform(),
-					.CustomizationData = Buildable->GetCustomizationData_Native(),
+					//.CustomizationData = Buildable->GetCustomizationData_Native(),
 				}
 			);
+
 			RedrawMap();
 		};
 
@@ -209,9 +210,9 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 	const auto LambdaAfterInvalidateRuntimeInstanceDataForIndex =
 		[this](AFGLightweightBuildableSubsystem* Instance, TSubclassOf<AFGBuildable> BuildableClass, int32 Index)
 		{
-			CARTO_LOG_DEBUG(TEXT("InvalidateRuntimeInstanceDataForIndex: %s, Skip: %d"), *BuildableClass->GetName(), ShouldInitialize);
+			CARTO_LOG_DEBUG(TEXT("InvalidateRuntimeInstanceDataForIndex: %s, Skip: %d"), *BuildableClass->GetName(), ShouldInitialize || IsClient);
 
-			if (ShouldInitialize)
+			if (ShouldInitialize || IsClient)
 			{
 				return;
 			}
@@ -223,19 +224,20 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 					.Buildable = nullptr,
                     .BuildableClass = BuildableClass,
                     .Transform = Data->Transform,
-                    .CustomizationData = Data->CustomizationData,
+                    //.CustomizationData = Data->CustomizationData,
                 }
             );
-            RedrawMap();
+
+			RedrawMap();
 		};
 
 
 	const auto LambdaAfterRemoveBuildable =
 		[this](AFGBuildableSubsystem* Instance, AFGBuildable* Buildable)
 		{
-			CARTO_LOG_DEBUG(TEXT("RemoveBuildable: %s, Skip: %d"), *Buildable->GetClass()->GetName(), ShouldInitialize);
+			CARTO_LOG_DEBUG(TEXT("RemoveBuildable: %s, Skip: %d"), *Buildable->GetClass()->GetName(), ShouldInitialize || IsClient);
 
-			if (ShouldInitialize)
+			if (ShouldInitialize || IsClient)
 			{
 				return;
 			}
@@ -245,15 +247,31 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
                     .Buildable = Buildable,
 					.BuildableClass = Buildable->GetClass(),
 					.Transform = Buildable->GetTransform(),
-					.CustomizationData = Buildable->GetCustomizationData_Native(),
+					//.CustomizationData = Buildable->GetCustomizationData_Native(),
 				}
 			);
+
 			RedrawMap();
 		};
 
 
+	const auto LambdaAfterBeginPlay =
+        [this](AFGPlayerController* Instance)
+        {
+	        AFGPlayerController* PlayerController = Cast<AFGPlayerController>(GetWorld()->GetFirstPlayerController());
+			auto* RCO = PlayerController->GetRemoteCallObjectOfClass<UCartographRemoteCallObject>();
+			if (RCO)
+			{
+				RCO->ServerRequestInitialBuildingData();
+			}
+        };
+
+
 	// Single player or non-dedicated host
 	SUBSCRIBE_UOBJECT_METHOD_AFTER(UFGSaveSession, LoadGame, LambdaAfterLoadGame);
+
+	const auto* PlayerController = GetMutableDefault<AFGPlayerController>();
+	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGPlayerController::BeginPlay, PlayerController, LambdaAfterBeginPlay);
 
 
 	SUBSCRIBE_UOBJECT_METHOD_AFTER(AFGLightweightBuildableSubsystem, AddFromBuildableInstanceData, LambdaAfterAddFromBuildableInstanceData);
@@ -268,10 +286,16 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 }
 
 
-void UCartographGameInstanceModule::OnWorldLoaded(UWorld* World)
+void UCartographGameInstanceModule::OnWorldLoaded()
 {
-	UKismetRenderingLibrary::ClearRenderTarget2D(this, RenderTarget, { 0, 0, 0, 0 });
-	WorldCached = World;
+	CARTO_LOG_DEBUG(TEXT("OnWorldLoaded"));
+
+	IsClient = GetWorld()->IsNetMode(NM_Client);
+
+	if (!FPlatformProperties::IsServerOnly())
+	{
+		UKismetRenderingLibrary::ClearRenderTarget2D(this, RenderTarget, { 0, 0, 0, 0 });
+	}
 }
 
 
@@ -283,7 +307,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
 
 	CurrentBuildingData.Empty(Factories.Num() + Buildings.Num());
 
-	const float TimeBudget = FCartograph_ConfigStruct::GetActiveConfig(WorldCached).InitializeTimeBudget;
+	const float TimeBudget = FCartograph_ConfigStruct::GetActiveConfig(GetWorld()).InitializeTimeBudget;
 	UE5Coro::Latent::FTickTimeBudget Budget = UE5Coro::Latent::FTickTimeBudget::Milliseconds(TimeBudget);
 
 	for (const TWeakObjectPtr<AFGBuildable>& Factory : Factories)
@@ -297,7 +321,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
             .Buildable = Factory,
 			.BuildableClass = Factory->GetClass(),
 			.Transform = Factory->GetTransform(),
-            .CustomizationData = Factory->GetCustomizationData_Native(),
+            //.CustomizationData = Factory->GetCustomizationData_Native(),
 		};
 
 		const int32 Pos = Algo::LowerBound(CurrentBuildingData, NewBuildingData);
@@ -314,7 +338,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
 				.Buildable = nullptr,
 				.BuildableClass = Type,
 				.Transform = InstanceData.Transform,
-				.CustomizationData = InstanceData.CustomizationData,
+				//.CustomizationData = InstanceData.CustomizationData,
 			};
 
 			const int32 Pos = Algo::LowerBound(CurrentBuildingData, NewBuildingData);
@@ -328,9 +352,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
 
 	IsInitializing = false;
 	IsPendingRedraw = false;
-	Coroutine = RedrawMapCoroutine(PendingAddBuildingData, PendingRemoveBuildingData);
-	PendingAddBuildingData.Empty();
-    PendingRemoveBuildingData.Empty();
+	ExecuteRedrawMapCoroutine();
 }
 
 
@@ -347,9 +369,7 @@ void UCartographGameInstanceModule::RedrawMap()
 	}
 	else
 	{
-		Coroutine = RedrawMapCoroutine(PendingAddBuildingData, PendingRemoveBuildingData);
-		PendingAddBuildingData.Empty();
-		PendingRemoveBuildingData.Empty();
+		ExecuteRedrawMapCoroutine();
 	}
 }
 
@@ -365,7 +385,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 
 	CARTO_LOG_DEBUG(TEXT("RedrawMapCoroutine Started"));
 
-	const float TimeBudget = FCartograph_ConfigStruct::GetActiveConfig(WorldCached).RedrawTimeBudget;
+	const float TimeBudget = FCartograph_ConfigStruct::GetActiveConfig(GetWorld()).RedrawTimeBudget;
 	UE5Coro::Latent::FTickTimeBudget Budget = UE5Coro::Latent::FTickTimeBudget::Milliseconds(TimeBudget);
 
 	{
@@ -392,7 +412,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 	        {
 	            if (CurrentBuildingData[i] == RemovedBuildingData)
 	            {
-	                CurrentBuildingData.RemoveAt(i);
+					CurrentBuildingData.RemoveAt(i);
 	                break;
 	            }
 	        }
@@ -401,6 +421,11 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 	    }
 
         CARTO_LOG_DEBUG(TEXT("Buildings Change Processed"));
+	}
+
+	if (FPlatformProperties::IsServerOnly())
+	{
+		co_return;
 	}
 
 	UKismetRenderingLibrary::ClearRenderTarget2D(this, RenderTarget, { 0, 0, 0, 0 });
@@ -413,7 +438,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 	FVector2D _;
 	UKismetRenderingLibrary::BeginDrawCanvasToRenderTarget(this, RenderTarget, Canvas, _, RenderContext);
 
-	FCartograph_ConfigStruct ConfigInstance = FCartograph_ConfigStruct::GetActiveConfig(WorldCached);
+	FCartograph_ConfigStruct ConfigInstance = FCartograph_ConfigStruct::GetActiveConfig(GetWorld());
     for (auto& [_, SplineData] : BuildableSplineDataMap)
     {
 		FProperty* Property = FCartograph_ConfigStruct::StaticStruct()->FindPropertyByName(SplineData.SparsityConfigName);
@@ -425,11 +450,11 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 		SplineData.SparsityCached = *Property->ContainerPtrToValuePtr<int>(&ConfigInstance);
     }
 
-	const AFGRecipeManager* RecipeManager = AFGRecipeManager::Get(WorldCached);
+	const AFGRecipeManager* RecipeManager = AFGRecipeManager::Get(GetWorld());
 
-	for (const auto& [Buildable, OriginalBuildableClass, Transform, CustomizationData] : CurrentBuildingData)
+	for (const auto& [Buildable, OriginalBuildableClass, Transform/*, CustomizationData*/] : CurrentBuildingData)
 	{
-		CARTO_LOG_DEBUG(TEXT("Buildable: %s, Transform: %s"), *OriginalBuildableClass->GetName(), *Transform.ToString());
+		CARTO_LOG_VERBOSE(TEXT("Buildable: %s, Transform: %s"), *OriginalBuildableClass->GetName(), *Transform.ToString());
 
 		TSoftClassPtr<AFGBuildable>* RedirectClass = BuildableClassRedirectMap.Find(OriginalBuildableClass.Get());
         const TSubclassOf<AFGBuildable> BuildableClass = RedirectClass ? RedirectClass->Get() : OriginalBuildableClass.Get();
@@ -680,7 +705,14 @@ void UCartographGameInstanceModule::OnCoroutineFinishedOrCancelled()
 
 	// The coroutine is also on the game thread, so I think no data race here.
     IsPendingRedraw = false;
+	ExecuteRedrawMapCoroutine();
+}
+
+
+void UCartographGameInstanceModule::ExecuteRedrawMapCoroutine()
+{
 	Coroutine = RedrawMapCoroutine(PendingAddBuildingData, PendingRemoveBuildingData);
+	ACartographModSubsystem::Instance->ClientUpdateBuildingData(PendingAddBuildingData, PendingRemoveBuildingData);
 	PendingAddBuildingData.Empty();
 	PendingRemoveBuildingData.Empty();
 }

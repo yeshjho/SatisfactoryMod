@@ -5,6 +5,9 @@
 #include "CartographGameWorldModule.generated.h"
 
 
+class UCartographGameInstanceModule;
+
+
 /**
  * 
  */

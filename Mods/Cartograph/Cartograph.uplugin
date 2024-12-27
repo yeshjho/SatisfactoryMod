@@ -30,7 +30,6 @@
 	],
 	"SemVersion": "0.5.0",
 	"GameVersion": ">=383729",
-	"RequiredOnRemote": false,
 	"LocalizationTargets": [
 		{
 			"Name": "Cartograph",

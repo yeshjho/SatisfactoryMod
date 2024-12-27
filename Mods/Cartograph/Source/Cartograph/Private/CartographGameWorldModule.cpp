@@ -14,5 +14,5 @@ void UCartographGameWorldModule::DispatchLifecycleEvent(ELifecyclePhase Phase)
     }
 
     UGameInstanceModule* Module = GetWorld()->GetGameInstance()->GetSubsystem<UGameInstanceModuleManager>()->FindModule("Cartograph");
-    Cast<UCartographGameInstanceModule>(Module)->OnWorldLoaded(GetWorld());
+    Cast<UCartographGameInstanceModule>(Module)->OnWorldLoaded();
 }
