@@ -110,6 +110,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 		{
 			CARTO_LOG_DEBUG(TEXT("LoadGame"));
 
+			IsClient = false;
 			ShouldInitialize = true;
             // Wait for ACartographModSubsystem to initialize
 			GetWorld()->GetTimerManager().SetTimerForNextTick(
@@ -139,7 +140,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
             FRuntimeBuildableInstanceData& BuildableInstanceData, bool FromSaveData = false, int32 SaveDataBuildableIndex = INDEX_NONE, 
             uint16 ConstructId = MAX_uint16, AActor* BuildEffectInstigator = nullptr, int32 BlueprintBuildEffectIndex = INDEX_NONE)
         {
-			CARTO_LOG_DEBUG(TEXT("AddFromBuildableInstanceData: %s, Skip: %d"), *BuildableClass->GetName(), ShouldInitialize || FromSaveData || IsClient);
+			CARTO_LOG_VERBOSE(TEXT("AddFromBuildableInstanceData: %s, Skip: %d"), *BuildableClass->GetName(), ShouldInitialize || FromSaveData || IsClient);
 
 			if (ShouldInitialize || FromSaveData || IsClient)
 			{
@@ -164,7 +165,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 			const FLightweightBuildableReplicationItem& ReplicationData, int32 MaxSize, 
 			AActor* BuildEffectInstigator, int32 BlueprintBuildIndex)
 		{
-			CARTO_LOG_DEBUG(TEXT("AddFromReplicatedData: %s, Skip: %d"), *BuildableClass->GetName(), ShouldInitialize || IsClient);
+			CARTO_LOG_VERBOSE(TEXT("AddFromReplicatedData: %s, Skip: %d"), *BuildableClass->GetName(), ShouldInitialize || IsClient);
 
 			if (ShouldInitialize || IsClient)
 			{
@@ -187,7 +188,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 	const auto LambdaAfterAddBuildable =
 		[this](AFGBuildableSubsystem* Instance, AFGBuildable* Buildable)
 		{
-			CARTO_LOG_DEBUG(TEXT("AddBuildable: %s, Skip: %d"), *Buildable->GetClass()->GetName(), ShouldInitialize || IsClient);
+			CARTO_LOG_VERBOSE(TEXT("AddBuildable: %s, Skip: %d"), *Buildable->GetClass()->GetName(), ShouldInitialize || IsClient);
 
 			if (ShouldInitialize || IsClient)
 			{
@@ -210,7 +211,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 	const auto LambdaAfterInvalidateRuntimeInstanceDataForIndex =
 		[this](AFGLightweightBuildableSubsystem* Instance, TSubclassOf<AFGBuildable> BuildableClass, int32 Index)
 		{
-			CARTO_LOG_DEBUG(TEXT("InvalidateRuntimeInstanceDataForIndex: %s, Skip: %d"), *BuildableClass->GetName(), ShouldInitialize || IsClient);
+			CARTO_LOG_VERBOSE(TEXT("InvalidateRuntimeInstanceDataForIndex: %s, Skip: %d"), *BuildableClass->GetName(), ShouldInitialize || IsClient);
 
 			if (ShouldInitialize || IsClient)
 			{
@@ -235,7 +236,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 	const auto LambdaAfterRemoveBuildable =
 		[this](AFGBuildableSubsystem* Instance, AFGBuildable* Buildable)
 		{
-			CARTO_LOG_DEBUG(TEXT("RemoveBuildable: %s, Skip: %d"), *Buildable->GetClass()->GetName(), ShouldInitialize || IsClient);
+			CARTO_LOG_VERBOSE(TEXT("RemoveBuildable: %s, Skip: %d"), *Buildable->GetClass()->GetName(), ShouldInitialize || IsClient);
 
 			if (ShouldInitialize || IsClient)
 			{
@@ -464,7 +465,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 
 	for (const auto& [Buildable, OriginalBuildableClass, Transform/*, CustomizationData*/] : CurrentBuildingData)
 	{
-		CARTO_LOG_VERBOSE(TEXT("Buildable: %s, Transform: %s"), *OriginalBuildableClass->GetName(), *Transform.ToString());
+		CARTO_LOG_VERY_VERBOSE(TEXT("Buildable: %s, Transform: %s"), *OriginalBuildableClass->GetName(), *Transform.ToString());
 
 		TSoftClassPtr<AFGBuildable>* RedirectClass = BuildableClassRedirectMap.Find(OriginalBuildableClass.Get());
         const TSubclassOf<AFGBuildable> BuildableClass = RedirectClass ? RedirectClass->Get() : OriginalBuildableClass.Get();
@@ -722,7 +723,10 @@ void UCartographGameInstanceModule::OnCoroutineFinishedOrCancelled()
 void UCartographGameInstanceModule::ExecuteRedrawMapCoroutine()
 {
 	Coroutine = RedrawMapCoroutine(PendingAddBuildingData, PendingRemoveBuildingData);
-	ACartographModSubsystem::Instance->ClientUpdateBuildingData(PendingAddBuildingData, PendingRemoveBuildingData);
+	if (!IsClient)
+	{
+		ACartographModSubsystem::Instance->ClientUpdateBuildingData(PendingAddBuildingData, PendingRemoveBuildingData);
+	}
 	PendingAddBuildingData.Empty();
 	PendingRemoveBuildingData.Empty();
 }
