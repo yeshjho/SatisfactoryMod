@@ -16,6 +16,7 @@ struct FInitialBuildingDataToSend
     TArray<FBuildingData> InitialBuildingData;
 	int Slices;
 	int LastSentSlice;
+    FTimerHandle TimerHandle;
 };
 
 

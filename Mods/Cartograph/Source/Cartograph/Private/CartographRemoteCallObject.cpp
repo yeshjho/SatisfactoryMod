@@ -17,6 +17,7 @@ void UCartographRemoteCallObject::GetLifetimeReplicatedProps(TArray<FLifetimePro
 
 void UCartographRemoteCallObject::ServerRequestInitialBuildingData_Implementation(APlayerController* PlayerController, EInitialDataSendPhase SendPhase)
 {
+    constexpr float TimeOut = 10.f;
     constexpr int Slice = std::numeric_limits<uint16_t>::max() / sizeof(FBuildingData) * 0.9;
 
     if (!GameInstanceModule)
@@ -39,11 +40,18 @@ void UCartographRemoteCallObject::ServerRequestInitialBuildingData_Implementatio
         break;
 
     case EInitialDataSendPhase::Finished:
+        GetWorld()->GetTimerManager().ClearTimer(InitialBuildingDataToSendPerPlayer.Find(PlayerController)->TimerHandle);
         InitialBuildingDataToSendPerPlayer.Remove(PlayerController);
         return;
     }
 
-    auto& [InitialBuildingData, Slices, LastSentSlice] = *InitialBuildingDataToSendPerPlayer.Find(PlayerController);
+    auto& [InitialBuildingData, Slices, LastSentSlice, TimerHandle] = *InitialBuildingDataToSendPerPlayer.Find(PlayerController);
+
+    GetWorld()->GetTimerManager().SetTimer(TimerHandle, [this, PlayerController]()
+        {
+            UE_LOG(LogCartograph, Warning, TEXT("Initial Data Send Timed Out"));
+            InitialBuildingDataToSendPerPlayer.Remove(PlayerController);
+        }, TimeOut, false);
 
     const int i = ++LastSentSlice;
     const int Start = i * Slice;
