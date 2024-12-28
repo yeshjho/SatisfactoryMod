@@ -75,9 +75,92 @@ auto FBuildingData::operator<=>(const FBuildingData& Other) const noexcept
 }
 
 
+FArchive& operator<<(FArchive& Ar, std::monostate&)
+{
+    return Ar;
+}
+
+
+FArchive& operator<<(FArchive& Ar, FSplineExtraData& SplineData)
+{
+	Ar << SplineData.SplinePoints;
+    Ar << SplineData.Spline;
+	return Ar;
+}
+
+
+FArchive& operator<<(FArchive& Ar, FWireExtraData& WireData)
+{
+    Ar << WireData.End;
+	return Ar;
+}
+
+
+FArchive& operator<<(FArchive& Ar, FBeamExtraData& BeamData)
+{
+	Ar << BeamData.Length;
+	return Ar;
+}
+
+
+bool FBuildingData::NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess)
+{
+    Ar << BuildableClass;
+    Ar << Transform;
+    //Ar << CustomizationData;
+
+    int ExtraDataIndex = BuildableExtraData.index();
+    Ar.SerializeBits(&ExtraDataIndex, 2);  // NOTE: Increase the bits if more extra data types are added
+	if (!Ar.IsLoading())  // Serialize
+	{
+        std::visit([&Ar](auto&& Data)
+            {
+                Ar << Data;
+            },
+            BuildableExtraData
+        );
+	}
+    else  // Deserialize
+	{
+        switch (ExtraDataIndex)
+        {
+        case 0:
+            BuildableExtraData = std::monostate{};
+            break;
+		case 1:
+		{
+			FSplineExtraData SplineData{};
+			Ar << SplineData;
+            BuildableExtraData = std::move(SplineData);
+			break;
+		}
+		case 2:
+		{
+            FWireExtraData WireData{};
+            Ar << WireData;
+            BuildableExtraData = std::move(WireData);
+			break;
+		}
+		case 3:
+		{
+            FBeamExtraData BeamData{};
+            Ar << BeamData;
+            BuildableExtraData = std::move(BeamData);
+			break;
+		}
+        default:
+            bOutSuccess = false;
+            return false;
+        }
+    }
+    bOutSuccess = true;
+    return true;
+}
+
+
 bool FBuildingData::operator==(const FBuildingData& Other) const noexcept
 {
-    return BuildableClass == Other.BuildableClass && Transform.Equals(Other.Transform);
+    return BuildableClass == Other.BuildableClass && Transform.Equals(Other.Transform) && BuildableExtraData == Other.BuildableExtraData;
     // Ignoring CustomizationData on purpose
 }
 
@@ -147,14 +230,12 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 				return;
 			}
 
-			PendingAddBuildingData.Add(
-				{
-                    .Buildable = nullptr,
+			FBuildingData Data{
 					.BuildableClass = BuildableClass,
 					.Transform = BuildableInstanceData.Transform,
 					//.CustomizationData = BuildableInstanceData.CustomizationData,
-				}
-			);
+			};
+			PendingAddBuildingData.Add(std::move(Data));
 
 			RedrawMap();
         };
@@ -172,14 +253,12 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 				return;
 			}
 
-			PendingAddBuildingData.Add(
-				{
-					.Buildable = nullptr,
+			FBuildingData Data{
 					.BuildableClass = BuildableClass,
 					.Transform = ReplicationData.Transform,
 					//.CustomizationData = ReplicationData.CustomizationData,
-				}
-			);
+			};
+			PendingAddBuildingData.Add(std::move(Data));
 
 			RedrawMap();
 		};
@@ -195,14 +274,13 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 				return;
 			}
 
-			PendingAddBuildingData.Add(
-				{
-                    .Buildable = Buildable,
+			FBuildingData Data{
 					.BuildableClass = Buildable->GetClass(),
 					.Transform = Buildable->GetTransform(),
 					//.CustomizationData = Buildable->GetCustomizationData_Native(),
-				}
-			);
+			};
+			AddExtraData(Data, Buildable);
+			PendingAddBuildingData.Add(std::move(Data));
 
 			RedrawMap();
 		};
@@ -218,16 +296,14 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 				return;
 			}
 
-			const FRuntimeBuildableInstanceData* Data = Instance->GetRuntimeDataForBuildableClassAndIndex(BuildableClass, Index);
+			const FRuntimeBuildableInstanceData* LightweightData = Instance->GetRuntimeDataForBuildableClassAndIndex(BuildableClass, Index);
 
-            PendingRemoveBuildingData.Add(
-                {
-					.Buildable = nullptr,
-                    .BuildableClass = BuildableClass,
-                    .Transform = Data->Transform,
-                    //.CustomizationData = Data->CustomizationData,
-                }
-            );
+			FBuildingData Data{
+					.BuildableClass = BuildableClass,
+					.Transform = LightweightData->Transform,
+					//.CustomizationData = Data->CustomizationData,
+			};
+            PendingRemoveBuildingData.Add(std::move(Data));
 
 			RedrawMap();
 		};
@@ -243,22 +319,26 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 				return;
 			}
 
-			PendingRemoveBuildingData.Add(
-				{
-                    .Buildable = Buildable,
-					.BuildableClass = Buildable->GetClass(),
-					.Transform = Buildable->GetTransform(),
-					//.CustomizationData = Buildable->GetCustomizationData_Native(),
-				}
-			);
+            FBuildingData Data{
+                    .BuildableClass = Buildable->GetClass(),
+                    .Transform = Buildable->GetTransform(),
+                    //.CustomizationData = Buildable->GetCustomizationData_Native(),
+            };
+			AddExtraData(Data, Buildable);
+			PendingRemoveBuildingData.Add(std::move(Data));
 
 			RedrawMap();
 		};
 
 
-	const auto LambdaAfterBeginPlay =
-        [this](AFGPlayerController* Instance)
+	const auto LambdaAfterCloseRespawnUI =
+        [this](AFGHUD* Instance)
         {
+            if (!ShouldInitialize)
+            {
+				return;
+            }
+
 	        AFGPlayerController* PlayerController = Cast<AFGPlayerController>(GetWorld()->GetFirstPlayerController());
 			if (PlayerController->HasAuthority())
 			{
@@ -268,6 +348,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 			auto* RCO = PlayerController->GetRemoteCallObjectOfClass<UCartographRemoteCallObject>();
 			if (RCO)
 			{
+				ShouldInitialize = false;
 				IsInitializing = true;
 				RCO->ServerRequestInitialBuildingData(PlayerController, EInitialDataSendPhase::Initial);
 			}
@@ -281,8 +362,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 	// Single player or non-dedicated host
 	SUBSCRIBE_UOBJECT_METHOD_AFTER(UFGSaveSession, LoadGame, LambdaAfterLoadGame);
 
-	const auto* PlayerController = GetMutableDefault<AFGPlayerController>();
-	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGPlayerController::BeginPlay, PlayerController, LambdaAfterBeginPlay);
+	SUBSCRIBE_UOBJECT_METHOD_AFTER(AFGHUD, CloseRespawnUI, LambdaAfterCloseRespawnUI);
 
 
 	SUBSCRIBE_UOBJECT_METHOD_AFTER(AFGLightweightBuildableSubsystem, AddFromBuildableInstanceData, LambdaAfterAddFromBuildableInstanceData);
@@ -301,6 +381,7 @@ void UCartographGameInstanceModule::OnWorldLoaded()
 {
 	CARTO_LOG_DEBUG(TEXT("OnWorldLoaded"));
 
+	ShouldInitialize = true;
 	IsClient = GetWorld()->IsNetMode(NM_Client);
 
 	if (!FPlatformProperties::IsServerOnly())
@@ -329,11 +410,11 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
 		}
 		
 		FBuildingData NewBuildingData{
-            .Buildable = Factory,
 			.BuildableClass = Factory->GetClass(),
 			.Transform = Factory->GetTransform(),
             //.CustomizationData = Factory->GetCustomizationData_Native(),
 		};
+        AddExtraData(NewBuildingData, Factory.Get());
 
 		const int32 Pos = Algo::LowerBound(CurrentBuildingData, NewBuildingData);
 		CurrentBuildingData.Insert(std::move(NewBuildingData), Pos);
@@ -346,7 +427,6 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
 		for (const FRuntimeBuildableInstanceData& InstanceData : Arr)
 		{
 			FBuildingData NewBuildingData{
-				.Buildable = nullptr,
 				.BuildableClass = Type,
 				.Transform = InstanceData.Transform,
 				//.CustomizationData = InstanceData.CustomizationData,
@@ -463,20 +543,15 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 
 	const AFGRecipeManager* RecipeManager = AFGRecipeManager::Get(GetWorld());
 
-	for (const auto& [Buildable, OriginalBuildableClass, Transform/*, CustomizationData*/] : CurrentBuildingData)
+	for (const auto& [OriginalBuildableClass, Transform/*, CustomizationData*/, BuildableExtraData] : CurrentBuildingData)
 	{
 		CARTO_LOG_VERY_VERBOSE(TEXT("Buildable: %s, Transform: %s"), *OriginalBuildableClass->GetName(), *Transform.ToString());
 
-		TSoftClassPtr<AFGBuildable>* RedirectClass = BuildableClassRedirectMap.Find(OriginalBuildableClass.Get());
+		const TSoftClassPtr<AFGBuildable>* RedirectClass = BuildableClassRedirectMap.Find(OriginalBuildableClass.Get());
         const TSubclassOf<AFGBuildable> BuildableClass = RedirectClass ? RedirectClass->Get() : OriginalBuildableClass.Get();
 
 		if (BuildableClass->ImplementsInterface(UFGSplineBuildableInterface::StaticClass()))
 		{
-			if (!Buildable.IsValid())
-			{
-				continue;
-			}
-
             const FSplineData* SplineData = BuildableSplineDataMap.Find(BuildableClass.Get());
 			if (!SplineData)
 			{
@@ -489,10 +564,14 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 				continue;
 			}
 
-            const auto* SplineBuildable = Cast<IFGSplineBuildableInterface>(Buildable.Get());
-			USplineComponent* SplineComponent = SplineBuildable->GetSplineComponent();
+			const FSplineExtraData* SplineExtraData = std::get_if<FSplineExtraData>(&BuildableExtraData);
+			if (!SplineExtraData)
+			{
+				UE_LOG(LogCartograph, Error, TEXT("Can't find spline extra data for %s"), *BuildableClass->GetName());
+				continue;
+			}
 
-			const int SplinePointCount = SplineComponent->SplineCurves.ReparamTable.Points.Num();
+			const int SplinePointCount = SplineExtraData->SplinePoints.Num();
 			if (SplinePointCount < 2)
 			{
 				continue;
@@ -501,8 +580,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 			float PrevInVal = 0;
 			for (int i = 1; i < SplinePointCount; i++)
 			{
-				const FInterpCurvePoint<float>& SplinePoint = SplineComponent->SplineCurves.ReparamTable.Points[i];
-				const float InVal = SplinePoint.InVal;
+				const float InVal = SplineExtraData->SplinePoints[i];
 				const float SegmentLength = InVal - PrevInVal;
                 PrevInVal = InVal;
 
@@ -514,26 +592,19 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
                     const float StartKey = (i - 1) + j * Step;
                     const float EndKey = (i - 1) + (j + 1) * Step;
 
-					const FVector Start = SplineComponent->GetLocationAtSplineInputKey(StartKey, ESplineCoordinateSpace::World);
-					const FVector End = SplineComponent->GetLocationAtSplineInputKey(EndKey, ESplineCoordinateSpace::World);
+					const FVector Start = Transform.TransformPosition(SplineExtraData->Spline.Eval(StartKey));
+					const FVector End = Transform.TransformPosition(SplineExtraData->Spline.Eval(EndKey));
                     draw_line(Canvas, Start, End, SplineData->Color, SplineData->Thickness);
 
-					// Not co_awaiting here because the Buildable and SplineComponent might become invalid after resuming.
-                    // I could copy the relevant data, but let's hope it doesn't take too long.
+					co_await Budget;
 				}
 			}
 
-			co_await Budget;
 			continue;
 		}
 
 		if (BuildableClass->IsChildOf(AFGBuildableWire::StaticClass()))
         {
-			if (!Buildable.IsValid())
-			{
-				continue;
-			}
-
             const FWireData* WireData = BuildableWireDataMap.Find(BuildableClass.Get());
             if (!WireData)
             {
@@ -546,10 +617,14 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 				continue;
 			}
 
-            const auto* Wire = Cast<AFGBuildableWire>(Buildable);
-            const FVector Start = Wire->GetConnectionLocation(0);
-            const FVector End = Wire->GetConnectionLocation(1);
-            draw_line(Canvas, Start, End, WireData->Color, WireData->Thickness);
+			const FWireExtraData* WireExtraData = std::get_if<FWireExtraData>(&BuildableExtraData);
+			if (!WireExtraData)
+			{
+                UE_LOG(LogCartograph, Error, TEXT("Can't find wire extra data for %s"), *BuildableClass->GetName());
+				continue;
+			}
+
+            draw_line(Canvas, Transform.GetLocation(), WireExtraData->End, WireData->Color, WireData->Thickness);
 
             co_await Budget;
 			continue;
@@ -557,11 +632,6 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 
 		if (BuildableClass->IsChildOf(AFGBuildableBeam::StaticClass()))
 		{
-			if (!Buildable.IsValid())
-			{
-				continue;
-			}
-
 			const FWireData* BeamData = BuildableWireDataMap.Find(BuildableClass.Get());
 			if (!BeamData)
 			{
@@ -569,8 +639,14 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 				continue;
 			}
 
-			const auto* Beam = Cast<AFGBuildableBeam>(Buildable);
-            const float Length = Beam->GetLength();
+			const FBeamExtraData* BeamExtraData = std::get_if<FBeamExtraData>(&BuildableExtraData);
+			if (!BeamExtraData)
+			{
+				UE_LOG(LogCartograph, Error, TEXT("Can't find beam extra data for %s"), *BuildableClass->GetName());
+				continue;
+			}
+
+            const float Length = BeamExtraData->Length;
 			const FVector Start = Transform.GetLocation();
             const FVector End = Start + Transform.GetRotation().Vector() * Length;
 			draw_line(Canvas, Start, End, BeamData->Color, BeamData->Thickness);
@@ -729,4 +805,50 @@ void UCartographGameInstanceModule::ExecuteRedrawMapCoroutine()
 	}
 	PendingAddBuildingData.Empty();
 	PendingRemoveBuildingData.Empty();
+}
+
+
+void UCartographGameInstanceModule::AddExtraData(FBuildingData& BuildingData, AFGBuildable* Buildable)
+{
+	const TSoftClassPtr<AFGBuildable> Class = Buildable->GetClass();
+	const TSoftClassPtr<AFGBuildable>* RedirectClass = BuildableClassRedirectMap.Find(Class);
+	const TSubclassOf<AFGBuildable> BuildableClass = RedirectClass ? RedirectClass->Get() : Class.Get();
+
+	if (BuildableClass->ImplementsInterface(UFGSplineBuildableInterface::StaticClass()))
+	{
+        const auto* Spline = Cast<IFGSplineBuildableInterface>(Buildable);
+		const USplineComponent* SplineComponent = Spline->GetSplineComponent();
+		BuildingData.Transform = SplineComponent->GetComponentTransform();
+
+        const TArray<FInterpCurvePoint<float>>& Points = SplineComponent->SplineCurves.ReparamTable.Points;
+        TArray<float> SplinePoints;
+        Algo::Transform(Points, SplinePoints, [](const FInterpCurvePoint<float>& Point) { return Point.InVal; });
+        BuildingData.BuildableExtraData = FSplineExtraData{
+			.SplinePoints = std::move(SplinePoints),
+            .Spline = SplineComponent->SplineCurves.Position,
+        };
+
+		return;
+	}
+
+	if (BuildableClass->IsChildOf(AFGBuildableWire::StaticClass()))
+	{
+		const auto* Wire = Cast<AFGBuildableWire>(Buildable);
+		BuildingData.Transform.SetLocation(Wire->GetConnectionLocation(0));
+        BuildingData.BuildableExtraData = FWireExtraData{
+            .End = Wire->GetConnectionLocation(1),
+        };
+
+		return;
+	}
+
+	if (BuildableClass->IsChildOf(AFGBuildableBeam::StaticClass()))
+	{
+        const auto* Beam = Cast<AFGBuildableBeam>(Buildable);
+        BuildingData.BuildableExtraData = FBeamExtraData{
+            .Length = Beam->GetLength(),
+        };
+
+		return;
+	}
 }

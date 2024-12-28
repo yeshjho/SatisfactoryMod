@@ -28,22 +28,55 @@ constexpr bool ENABLE_VERY_VERBOSE_LOG = false;
 #define CARTO_LOG_VERY_VERBOSE(...) if constexpr (ENABLE_VERY_VERBOSE_LOG) UE_LOG(LogCartograph, Display, __VA_ARGS__)
 
 
+struct FSplineExtraData
+{
+	TArray<float> SplinePoints;
+	FInterpCurveVector Spline;
+
+	bool operator==(const FSplineExtraData& Other) const noexcept = default;
+};
+
+
+struct FWireExtraData
+{
+	FVector End;
+
+	bool operator==(const FWireExtraData& Other) const noexcept = default;
+};
+
+
+struct FBeamExtraData
+{
+	float Length;
+
+	bool operator==(const FBeamExtraData& Other) const noexcept = default;
+};
+
+
 USTRUCT()
 struct FBuildingData
 {
 	GENERATED_BODY()
 
-	UPROPERTY()
-    TWeakObjectPtr<AFGBuildable> Buildable;  // nullptr for LightweightBuildables.
-	UPROPERTY()
     TSubclassOf<AFGBuildable> BuildableClass;
-	UPROPERTY()
 	FTransform Transform;
-	//UPROPERTY()
 	//FFactoryCustomizationData CustomizationData;
+	std::variant<std::monostate, FSplineExtraData, FWireExtraData, FBeamExtraData> BuildableExtraData;
+
+    bool NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess);
 
 	bool operator==(const FBuildingData& Other) const noexcept;
 	auto operator<=>(const FBuildingData& Other) const noexcept;
+};
+
+
+template<>
+struct TStructOpsTypeTraits<FBuildingData> : public TStructOpsTypeTraitsBase2<FBuildingData>
+{
+	enum
+	{
+		WithNetSerializer = true
+	};
 };
 
 
@@ -118,6 +151,8 @@ private:
 	void OnCoroutineFinishedOrCancelled();
 
 	void ExecuteRedrawMapCoroutine();
+
+	void AddExtraData(FBuildingData& BuildingData, AFGBuildable* Buildable);
 
 
 protected:
