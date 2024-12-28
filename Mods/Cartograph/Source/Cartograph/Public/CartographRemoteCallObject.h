@@ -11,6 +11,23 @@
 #include "CartographRemoteCallObject.generated.h"
 
 
+struct FInitialBuildingDataToSend
+{
+    TArray<FBuildingData> InitialBuildingData;
+	int Slices;
+	int LastSentSlice;
+};
+
+
+UENUM()
+enum class EInitialDataSendPhase
+{
+	Initial,
+	Normal,
+	Finished
+};
+
+
 /**
  * 
  */
@@ -26,8 +43,8 @@ public:
 
 private:
 	UFUNCTION(Server, Reliable)
-	void ServerRequestInitialBuildingData();
-	void ServerRequestInitialBuildingData_Implementation();
+	void ServerRequestInitialBuildingData(APlayerController* PlayerController, EInitialDataSendPhase SendPhase);
+	void ServerRequestInitialBuildingData_Implementation(APlayerController* PlayerController, EInitialDataSendPhase SendPhase);
 
 	UFUNCTION(Client, Reliable)
 	void ClientReceiveInitialBuildingData(const TArray<FBuildingData>& Array, bool IsLast);
@@ -39,6 +56,8 @@ private:
 protected:
 	UPROPERTY(Replicated)
 	bool bDummy = true;
+
+	TMap<APlayerController*, FInitialBuildingDataToSend> InitialBuildingDataToSendPerPlayer;
 
     UCartographGameInstanceModule* GameInstanceModule = nullptr;
 };

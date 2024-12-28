@@ -15,16 +15,45 @@ void UCartographRemoteCallObject::GetLifetimeReplicatedProps(TArray<FLifetimePro
 }
 
 
-void UCartographRemoteCallObject::ServerRequestInitialBuildingData_Implementation()
+void UCartographRemoteCallObject::ServerRequestInitialBuildingData_Implementation(APlayerController* PlayerController, EInitialDataSendPhase SendPhase)
 {
+    constexpr int Slice = std::numeric_limits<uint16_t>::max() / sizeof(FBuildingData) * 0.9;
+
     if (!GameInstanceModule)
     {
         UGameInstanceModule* Module = GetWorld()->GetGameInstance()->GetSubsystem<UGameInstanceModuleManager>()->FindModule("Cartograph");
         GameInstanceModule = Cast<UCartographGameInstanceModule>(Module);
     }
 
-    GameInstanceModule->IsInitializing = true;
-    SendInitialBuildingData(GameInstanceModule->CurrentBuildingData, FForceLatentCoroutine{});
+    switch (SendPhase)
+    {
+    case EInitialDataSendPhase::Initial:
+        InitialBuildingDataToSendPerPlayer.Add(PlayerController, FInitialBuildingDataToSend{
+            .InitialBuildingData = GameInstanceModule->CurrentBuildingData,
+            .Slices = GameInstanceModule->CurrentBuildingData.Num() / Slice + 1,
+            .LastSentSlice = -1,
+        });
+        break;
+
+    case EInitialDataSendPhase::Normal:
+        break;
+
+    case EInitialDataSendPhase::Finished:
+        InitialBuildingDataToSendPerPlayer.Remove(PlayerController);
+        return;
+    }
+
+    auto& [InitialBuildingData, Slices, LastSentSlice] = *InitialBuildingDataToSendPerPlayer.Find(PlayerController);
+
+    const int i = ++LastSentSlice;
+    const int Start = i * Slice;
+    const int End = FMath::Min((i + 1) * Slice, InitialBuildingData.Num());
+    CARTO_LOG_DEBUG(TEXT("Sending Initial Data (%d/%d)"), i + 1, Slices);
+    ClientReceiveInitialBuildingData(TArray<FBuildingData>{ 
+			InitialBuildingData.GetData() + Start,
+    		End - Start
+		},
+        i == Slices - 1);
 }
 
 
@@ -45,32 +74,7 @@ void UCartographRemoteCallObject::ClientReceiveInitialBuildingData_Implementatio
         GameInstanceModule->IsInitializing = false;
         GameInstanceModule->RedrawMap();
     }
-}
 
-
-UE5Coro::TCoroutine<> UCartographRemoteCallObject::SendInitialBuildingData(TArray<FBuildingData> BuildingData, FForceLatentCoroutine)
-{
-    const APlayerController* PlayerController = GetWorld()->GetFirstPlayerController();
-    UNetConnection* Connection = PlayerController->GetNetConnection();
-    const int Slice = Connection->GetMaxSingleBunchSizeBits() / sizeof(FBuildingData);
-
-    const int Count = GameInstanceModule->CurrentBuildingData.Num();
-    const int Slices = Count / Slice + 1;
-
-    for (int i = 0; i < Slices; i++)
-    {
-        CARTO_LOG_DEBUG(TEXT("Sending Initial Data"));
-
-        const int Start = i * Slice;
-        const int End = FMath::Min((i + 1) * Slice, Count);
-        ClientReceiveInitialBuildingData(TArray<FBuildingData>{ GameInstanceModule->CurrentBuildingData.GetData() + Start, End - Start }, i == Slices - 1);
-
-        co_await UE5Coro::Latent::Until(
-            [Connection]()
-            {
-                const int OutgoingBunchesNum = Connection->GetOutgoingBunches().Num() + 1;
-                // DataChannel.cpp: 1330
-                return !(OutgoingBunchesNum >= 8/*GCVarNetPartialBunchReliableThreshold*/ && !Connection->IsInternalAck());
-            });
-    }
+    ServerRequestInitialBuildingData(GetWorld()->GetFirstPlayerController(), 
+        IsLast ? EInitialDataSendPhase::Finished : EInitialDataSendPhase::Normal);
 }

@@ -259,10 +259,20 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
         [this](AFGPlayerController* Instance)
         {
 	        AFGPlayerController* PlayerController = Cast<AFGPlayerController>(GetWorld()->GetFirstPlayerController());
+			if (PlayerController->HasAuthority())
+			{
+				return;
+			}
+
 			auto* RCO = PlayerController->GetRemoteCallObjectOfClass<UCartographRemoteCallObject>();
 			if (RCO)
 			{
-				RCO->ServerRequestInitialBuildingData();
+				IsInitializing = true;
+				RCO->ServerRequestInitialBuildingData(PlayerController, EInitialDataSendPhase::Initial);
+			}
+			else
+			{
+                UE_LOG(LogCartograph, Error, TEXT("Failed to get RemoteCallObject"));
 			}
         };
 
