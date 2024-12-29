@@ -23,6 +23,7 @@
 #include "CartographModSubsystem.h"
 #include "CartographRemoteCallObject.h"
 #include "Cartograph_ConfigStruct.h"
+#include "QuantizedVector2DSerialization.h"
 
 
 constexpr int RENDER_TEXTURE_SIZE = 1024 * 8;
@@ -80,6 +81,47 @@ auto FBuildingData::operator<=>(const FBuildingData& Other) const noexcept
 }
 
 
+FArchive& operator<<(FArchive& Ar, TArray<FVector2D>& A)
+{
+	A.CountBytes(Ar);
+
+	using SizeType = int32;
+	SizeType SerializeNum = Ar.IsLoading() ? 0 : A.Num();
+
+	Ar << SerializeNum;
+
+	if (SerializeNum == 0)
+	{
+		// if we are loading, then we have to reset the size to 0, in case it isn't currently 0
+		if (Ar.IsLoading())
+		{
+			A.Empty();
+		}
+		return Ar;
+	}
+
+	if (Ar.IsLoading())
+	{
+		// Required for resetting ArrayNum
+		A.Empty(SerializeNum);
+
+		for (SizeType i = 0; i < SerializeNum; i++)
+		{
+			SerializeQuantizedVector2D<1>(A.AddDefaulted_GetRef(), Ar);
+		}
+	}
+	else
+	{
+		for (SizeType i = 0; i < SerializeNum; i++)
+		{
+			SerializeQuantizedVector2D<1>(A[i], Ar);
+		}
+	}
+
+	return Ar;
+}
+
+
 FArchive& operator<<(FArchive& Ar, std::monostate&)
 {
     return Ar;
@@ -88,14 +130,40 @@ FArchive& operator<<(FArchive& Ar, std::monostate&)
 
 FArchive& operator<<(FArchive& Ar, FSplineExtraData& SplineData)
 {
-    Ar << SplineData.Spline;
+    Ar << SplineData.SplinePoints;
+
+    if (!Ar.IsLoading())  // Serialize
+	{
+		bool IsSet = SplineData.Tangents.IsSet();
+		Ar.SerializeBits(&IsSet, 1);
+
+		if (IsSet)
+		{
+			auto& [LeaveTangents, ArriveTangents] = SplineData.Tangents.GetValue();
+			Ar << LeaveTangents;
+			Ar << ArriveTangents;
+		}
+	}
+    else  // Deserialize
+	{
+        bool IsSet;
+        Ar.SerializeBits(&IsSet, 1);
+		if (IsSet)
+		{
+            TArray<FVector2D> LeaveTangents, ArriveTangents;
+            Ar << LeaveTangents;
+            Ar << ArriveTangents;
+            SplineData.Tangents = std::make_pair(std::move(LeaveTangents), std::move(ArriveTangents));
+		}
+	}
+    
 	return Ar;
 }
 
 
 FArchive& operator<<(FArchive& Ar, FWireExtraData& WireData)
 {
-	SerializePackedVector<1, 24>(WireData.End, Ar);
+	SerializeQuantizedVector2D<1>(WireData.End, Ar);
 	return Ar;
 }
 
@@ -141,7 +209,7 @@ bool FBuildingData::NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSucce
         }
         else
         {
-            UE_LOG(LogCartograph, Error, TEXT("Class ID %d not found in ClassIDToClassPtrMap"), ClassIDHash);
+            UE_LOG(LogCartograph, Error, TEXT("Class ID %u not found in ClassIDToClassPtrMap"), ClassIDHash);
             bOutSuccess = false;
         }
 	}
@@ -651,32 +719,48 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 				continue;
 			}
 
-			const int SplinePointCount = SplineExtraData->Spline.Points.Num();
+			const int SplinePointCount = SplineExtraData->SplinePoints.Num();
 			if (SplinePointCount < 2)
 			{
 				continue;
 			}
 
-			float PrevInVal = SplineExtraData->Spline.Points[0].InVal;
+			const int Segments = SplineData->SegmentsCached;
+			const float Step = 1.f / Segments;
+
+            const std::pair<TArray<FVector2D>, TArray<FVector2D>>* Tangents = SplineExtraData->Tangents.GetPtrOrNull();
+
 			for (int i = 1; i < SplinePointCount; i++)
 			{
-				const float InVal = SplineExtraData->Spline.Points[i].InVal;
-
-				const int Segments = SplineData->SegmentsCached;
-				const float Step = 1.f / Segments;
+				const FVector2D& PrevPoint = SplineExtraData->SplinePoints[i - 1];
+				const FVector2D& NextPoint = SplineExtraData->SplinePoints[i];
 
 				for (int j = 0; j < Segments; j++)
 				{
-                    const float StartKey = FMath::Lerp(PrevInVal, InVal, j * Step);
-                    const float EndKey = FMath::Lerp(PrevInVal, InVal, (j + 1) * Step);
+					if (SplineData->UseTangents)
+					{
+						const FVector2D& LeaveTangent = Tangents->first[i - 1];
+                        const FVector2D& ArriveTangent = Tangents->second[i];
+						
+						const FVector2D Start{ Transform.TransformPosition(FVector{ 
+							FMath::CubicInterp(PrevPoint, LeaveTangent, NextPoint, ArriveTangent, j * Step), 0 }) };
+						const FVector2D End{ Transform.TransformPosition(FVector{ 
+							FMath::CubicInterp(PrevPoint, LeaveTangent, NextPoint, ArriveTangent, (j + 1) * Step), 0 }) };
 
-					const FVector Start = Transform.TransformPosition(SplineExtraData->Spline.Eval(StartKey));
-					const FVector End = Transform.TransformPosition(SplineExtraData->Spline.Eval(EndKey));
-                    draw_line(Canvas, Start, End, SplineData->Color, SplineData->Thickness);
+						draw_line(Canvas, Start, End, SplineData->Color, SplineData->Thickness);
+					}
+					else
+					{
+						const FVector2D Start{ Transform.TransformPosition(FVector{ 
+							FMath::Lerp(PrevPoint, NextPoint, j * Step), 0 }) };
+						const FVector2D End{ Transform.TransformPosition(FVector{ 
+							FMath::Lerp(PrevPoint, NextPoint, (j + 1) * Step), 0 }) };
+
+						draw_line(Canvas, Start, End, SplineData->Color, SplineData->Thickness);
+					}
 
 					co_await Budget;
 				}
-				PrevInVal = InVal;
 			}
 
 			continue;
@@ -899,10 +983,32 @@ void UCartographGameInstanceModule::AddExtraData(FBuildingData& BuildingData, AF
 		const USplineComponent* SplineComponent = Spline->GetSplineComponent();
 		BuildingData.Transform = SplineComponent->GetComponentTransform();
 
-        BuildingData.BuildableExtraData = FSplineExtraData{
-            .Spline = SplineComponent->SplineCurves.Position,
+		TArray<FVector2D> SplinePoints;
+        Algo::Transform(SplineComponent->SplineCurves.Position.Points, SplinePoints, 
+			[](const FInterpCurvePoint<FVector>& Point) { return FVector2D{ Point.OutVal }; });
+        FSplineExtraData ExtraData{
+            .SplinePoints = std::move(SplinePoints),
         };
 
+        if (const FSplineData* SplineData = BuildableSplineDataMap.Find(BuildableClass.Get());
+			!SplineData)
+		{
+			UE_LOG(LogCartograph, Warning, TEXT("Can't find spline data for %s"), *BuildableClass->GetName());
+		}
+		else if (SplineData->UseTangents)
+		{
+			TArray<FVector2D> LeaveTangents;
+			Algo::Transform(SplineComponent->SplineCurves.Position.Points, LeaveTangents,
+				[](const FInterpCurvePoint<FVector>& Point) { return FVector2D{ Point.LeaveTangent }; });
+
+			TArray<FVector2D> ArriveTangents;
+			Algo::Transform(SplineComponent->SplineCurves.Position.Points, ArriveTangents,
+				[](const FInterpCurvePoint<FVector>& Point) { return FVector2D{ Point.ArriveTangent }; });
+
+			ExtraData.Tangents = std::make_pair(std::move(LeaveTangents), std::move(ArriveTangents));
+		}
+
+        BuildingData.BuildableExtraData = std::move(ExtraData);
 		return;
 	}
 
@@ -912,7 +1018,7 @@ void UCartographGameInstanceModule::AddExtraData(FBuildingData& BuildingData, AF
 		BuildingData.Transform.SetLocation(Wire->GetConnectionLocation(0));
 
         BuildingData.BuildableExtraData = FWireExtraData{
-            .End = Wire->GetConnectionLocation(1),
+			.End = FVector2D{ Wire->GetConnectionLocation(1) },
         };
 
 		return;

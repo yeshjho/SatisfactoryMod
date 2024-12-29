@@ -30,7 +30,8 @@ constexpr bool ENABLE_VERY_VERBOSE_LOG = false;
 
 struct FSplineExtraData
 {
-	FInterpCurveVector Spline;
+	TArray<FVector2D> SplinePoints;
+	TOptional<std::pair<TArray<FVector2D>, TArray<FVector2D>>> Tangents;
 
 	bool operator==(const FSplineExtraData& Other) const noexcept = default;
 };
@@ -38,7 +39,7 @@ struct FSplineExtraData
 
 struct FWireExtraData
 {
-	FVector End;
+	FVector2D End;
 
 	bool operator==(const FWireExtraData& Other) const noexcept = default;
 };
@@ -111,6 +112,9 @@ struct FSplineData
 
 	UPROPERTY(EditDefaultsOnly)
 	FName SegmentsConfigName;
+
+	UPROPERTY(EditDefaultsOnly)
+	bool UseTangents;
 
 	int SegmentsCached;
 };
