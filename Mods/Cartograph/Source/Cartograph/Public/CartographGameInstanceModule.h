@@ -23,14 +23,13 @@ DECLARE_LOG_CATEGORY_EXTERN(LogCartograph, Display, All);
 constexpr bool ENABLE_DEBUG_LOG = true;
 constexpr bool ENABLE_VERBOSE_LOG = false;
 constexpr bool ENABLE_VERY_VERBOSE_LOG = false;
-#define CARTO_LOG_DEBUG(...) if constexpr (ENABLE_DEBUG_LOG) UE_LOG(LogCartograph, Display, __VA_ARGS__)
-#define CARTO_LOG_VERBOSE(...) if constexpr (ENABLE_VERBOSE_LOG) UE_LOG(LogCartograph, Display, __VA_ARGS__)
-#define CARTO_LOG_VERY_VERBOSE(...) if constexpr (ENABLE_VERY_VERBOSE_LOG) UE_LOG(LogCartograph, Display, __VA_ARGS__)
+#define CARTO_LOG_DEBUG(format, ...) if constexpr (ENABLE_DEBUG_LOG) UE_LOG(LogCartograph, Display, TEXT(format) __VA_OPT__(, __VA_ARGS__))
+#define CARTO_LOG_VERBOSE(format, ...) if constexpr (ENABLE_VERBOSE_LOG) UE_LOG(LogCartograph, Display, TEXT(format) __VA_OPT__(, __VA_ARGS__))
+#define CARTO_LOG_VERY_VERBOSE(format, ...) if constexpr (ENABLE_VERY_VERBOSE_LOG) UE_LOG(LogCartograph, Display, TEXT(format) __VA_OPT__(, __VA_ARGS__))
 
 
 struct FSplineExtraData
 {
-	TArray<float> SplinePoints;
 	FInterpCurveVector Spline;
 
 	bool operator==(const FSplineExtraData& Other) const noexcept = default;
@@ -111,9 +110,9 @@ struct FSplineData
     float Thickness;
 
 	UPROPERTY(EditDefaultsOnly)
-	FName SparsityConfigName;
+	FName SegmentsConfigName;
 
-	int SparsityCached;
+	int SegmentsCached;
 };
 
 

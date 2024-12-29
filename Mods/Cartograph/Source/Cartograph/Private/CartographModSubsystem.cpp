@@ -25,7 +25,7 @@ void ACartographModSubsystem::Init()
     UGameInstanceModule* Module = GetWorld()->GetGameInstance()->GetSubsystem<UGameInstanceModuleManager>()->FindModule("Cartograph");
     GameInstanceModule = Cast<UCartographGameInstanceModule>(Module);
 
-    CARTO_LOG_DEBUG(TEXT("CartographModSubsystem::Init"));
+    CARTO_LOG_DEBUG("CartographModSubsystem::Init");
 
     Instance = this;
 }
@@ -35,11 +35,11 @@ void ACartographModSubsystem::ClientUpdateBuildingData_Implementation(const TArr
 {
     if (HasAuthority())
     {
-        CARTO_LOG_DEBUG(TEXT("Sending Update Data"));
+        CARTO_LOG_DEBUG("Sending Update Data");
         return;
     }
 
-    CARTO_LOG_DEBUG(TEXT("Received Update Data"));
+    CARTO_LOG_DEBUG("Received Update Data");
 
     GameInstanceModule->PendingAddBuildingData.Append(AddedBuildings);
     GameInstanceModule->PendingRemoveBuildingData.Append(RemovedBuildings);

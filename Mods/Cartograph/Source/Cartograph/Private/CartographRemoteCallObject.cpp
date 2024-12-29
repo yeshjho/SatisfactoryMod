@@ -47,7 +47,7 @@ void UCartographRemoteCallObject::ServerRequestInitialBuildingData_Implementatio
         FBufferWriter Archive{ nullptr, 0, EBufferWriterFlags::AllowResize };
         Archive.ArIsNetArchive = true;
         Archive << GameInstanceModule->CurrentBuildingData;
-        CARTO_LOG_DEBUG(TEXT("Initial Data Size: %d"), Archive.TotalSize());
+        CARTO_LOG_DEBUG("Initial Data Size: %d", Archive.TotalSize());
 
         InitialBuildingDataToSendPerPlayer.Add(PlayerController, FInitialBuildingDataToSend{
 	            .InitialBuildingData = std::move(Archive),
@@ -78,7 +78,7 @@ void UCartographRemoteCallObject::ServerRequestInitialBuildingData_Implementatio
     FMemory::Memcpy(SendBuffer.Data, static_cast<uint8*>(InitialBuildingData.GetWriterData()) + i * BuildingDataBufferMaxSize, Size);
     ClientReceiveInitialBuildingData(SendBuffer, Size, i == Slices - 1);
 
-    CARTO_LOG_DEBUG(TEXT("Sending Initial Data (%d/%d)"), i + 1, Slices);
+    CARTO_LOG_DEBUG("Sending Initial Data (%d/%d)", i + 1, Slices);
 
     GetWorld()->GetTimerManager().SetTimer(TimerHandle, [this, PlayerController]()
         {
@@ -93,7 +93,7 @@ void UCartographRemoteCallObject::ServerRequestInitialBuildingData_Implementatio
 
 void UCartographRemoteCallObject::ClientReceiveInitialBuildingData_Implementation(const FBuildingDataBuffer& Array, int Size, bool IsLast)
 {
-    CARTO_LOG_DEBUG(TEXT("Received Initial Data"));
+    CARTO_LOG_DEBUG("Received Initial Data");
     Buffer.Append(Array.Data, Size);
 
     if (IsLast)
@@ -103,7 +103,7 @@ void UCartographRemoteCallObject::ClientReceiveInitialBuildingData_Implementatio
             UGameInstanceModule* Module = GetWorld()->GetGameInstance()->GetSubsystem<UGameInstanceModuleManager>()->FindModule("Cartograph");
             GameInstanceModule = Cast<UCartographGameInstanceModule>(Module);
         }
-        CARTO_LOG_DEBUG(TEXT("Was Last. Received %d."), Buffer.Num());
+        CARTO_LOG_DEBUG("Was Last. Received %d.", Buffer.Num());
         InitialBuildableDeserialize();
     }
 

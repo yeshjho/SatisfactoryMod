@@ -16,16 +16,16 @@ public:
     float RedrawTimeBudget{};
 
     UPROPERTY(BlueprintReadWrite)
-    int32 ConveyorBeltSplineSegmentSparsity{};
+    int32 ConveyorBeltSplineSegments{};
 
     UPROPERTY(BlueprintReadWrite)
-    int32 PipelineSplineSegmentSparsity{};
+    int32 PipelineSplineSegments{};
 
     UPROPERTY(BlueprintReadWrite)
-    int32 RailwaySegmentSparsity{};
+    int32 RailwaySegments{};
 
     UPROPERTY(BlueprintReadWrite)
-    int32 HypertubeSegmentSparsity{};
+    int32 HypertubeSegments{};
 
     /* Retrieves active configuration value and returns object of this struct containing it */
     static FCartograph_ConfigStruct GetActiveConfig(UObject* WorldContext) {

@@ -53,8 +53,12 @@ FVector2D world_position_to_screen_position(const T& WorldPosition, const U& Siz
 	} * RENDER_TEXTURE_SIZE;
 }
 
-
-void draw_line(UCanvas* Canvas, const FVector& WorldStart, const FVector& WorldEnd, const FLinearColor& Color, float Thickness)
+		
+template<typename T, typename U>
+    requires
+		(std::is_same_v<T, FVector> || std::is_same_v<T, FVector2D>) &&
+		(std::is_same_v<U, FVector> || std::is_same_v<U, FVector2D>)
+void draw_line(UCanvas* Canvas, const T& WorldStart, const U& WorldEnd, const FLinearColor& Color, float Thickness)
 {
     const FVector2D StartScreenPosition = world_position_to_screen_position(WorldStart, FVector::ZeroVector);
     const FVector2D EndScreenPosition = world_position_to_screen_position(WorldEnd, FVector::ZeroVector);
@@ -84,7 +88,6 @@ FArchive& operator<<(FArchive& Ar, std::monostate&)
 
 FArchive& operator<<(FArchive& Ar, FSplineExtraData& SplineData)
 {
-	Ar << SplineData.SplinePoints;
     Ar << SplineData.Spline;
 	return Ar;
 }
@@ -92,14 +95,21 @@ FArchive& operator<<(FArchive& Ar, FSplineExtraData& SplineData)
 
 FArchive& operator<<(FArchive& Ar, FWireExtraData& WireData)
 {
-	SerializePackedVector<10, 27>(WireData.End, Ar);
+	SerializePackedVector<1, 24>(WireData.End, Ar);
 	return Ar;
 }
 
 
 FArchive& operator<<(FArchive& Ar, FBeamExtraData& BeamData)
 {
-	Ar << BeamData.Length;
+	if (!Ar.IsLoading())  // Serialize
+	{
+		WriteFixedCompressedFloat<16384, 16>(BeamData.Length, Ar);
+	}
+    else  // Deserialize
+    {
+        ReadFixedCompressedFloat<16384, 16>(BeamData.Length, Ar);
+    }
 	return Ar;
 }
 
@@ -131,12 +141,34 @@ bool FBuildingData::NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSucce
         }
         else
         {
-            UE_LOG(LogCartograph, Error, TEXT("Class ID %llu not found in ClassIDToClassPtrMap"), ClassIDHash);
+            UE_LOG(LogCartograph, Error, TEXT("Class ID %d not found in ClassIDToClassPtrMap"), ClassIDHash);
             bOutSuccess = false;
         }
 	}
 
-    Ar << Transform;
+	if (!Ar.IsLoading())  // Serialize
+	{
+		FVector Location = Transform.GetLocation();
+		bOutSuccess &= SerializePackedVector<1, 24>(Location, Ar);
+		Transform.Rotator().SerializeCompressedShort(Ar);
+
+		// We really need to pack the data, so we'll ignore scales for the clients.
+		//FVector Scale = Transform.GetScale3D();
+        //bOutSuccess &= SerializePackedVector<1, 24>(Scale, Ar);
+	}
+	else
+	{
+        FVector Location;
+        bOutSuccess &= SerializePackedVector<1, 24>(Location, Ar);
+        FRotator Rotation;
+        Rotation.SerializeCompressedShort(Ar);
+        Transform = FTransform{ Rotation, Location };
+
+        //FVector Scale;
+        //bOutSuccess &= SerializePackedVector<1, 24>(Scale, Ar);
+        //Transform.SetScale3D(Scale);
+    }
+
     //Ar << CustomizationData;
 
     int ExtraDataIndex = BuildableExtraData.index();
@@ -232,7 +264,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 	const auto LambdaAfterLoadGame =
 		[this](bool ReturnValue, UFGSaveSession* Instance, const FString& SaveName)
 		{
-			CARTO_LOG_DEBUG(TEXT("LoadGame"));
+			CARTO_LOG_DEBUG("LoadGame");
 
 			IsClient = false;
 			ShouldInitialize = true;
@@ -264,7 +296,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
             FRuntimeBuildableInstanceData& BuildableInstanceData, bool FromSaveData = false, int32 SaveDataBuildableIndex = INDEX_NONE, 
             uint16 ConstructId = MAX_uint16, AActor* BuildEffectInstigator = nullptr, int32 BlueprintBuildEffectIndex = INDEX_NONE)
         {
-			CARTO_LOG_VERBOSE(TEXT("AddFromBuildableInstanceData: %s, Skip: %d"), *BuildableClass->GetName(), ShouldInitialize || FromSaveData || IsClient);
+			CARTO_LOG_VERBOSE("AddFromBuildableInstanceData: %s, Skip: %d", *BuildableClass->GetName(), ShouldInitialize || FromSaveData || IsClient);
 
 			if (ShouldInitialize || FromSaveData || IsClient)
 			{
@@ -287,7 +319,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 			const FLightweightBuildableReplicationItem& ReplicationData, int32 MaxSize, 
 			AActor* BuildEffectInstigator, int32 BlueprintBuildIndex)
 		{
-			CARTO_LOG_VERBOSE(TEXT("AddFromReplicatedData: %s, Skip: %d"), *BuildableClass->GetName(), ShouldInitialize || IsClient);
+			CARTO_LOG_VERBOSE("AddFromReplicatedData: %s, Skip: %d", *BuildableClass->GetName(), ShouldInitialize || IsClient);
 
 			if (ShouldInitialize || IsClient)
 			{
@@ -308,7 +340,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 	const auto LambdaAfterAddBuildable =
 		[this](AFGBuildableSubsystem* Instance, AFGBuildable* Buildable)
 		{
-			CARTO_LOG_VERBOSE(TEXT("AddBuildable: %s, Skip: %d"), *Buildable->GetClass()->GetName(), ShouldInitialize || IsClient);
+			CARTO_LOG_VERBOSE("AddBuildable: %s, Skip: %d", *Buildable->GetClass()->GetName(), ShouldInitialize || IsClient);
 
 			if (ShouldInitialize || IsClient)
 			{
@@ -330,7 +362,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 	const auto LambdaAfterInvalidateRuntimeInstanceDataForIndex =
 		[this](AFGLightweightBuildableSubsystem* Instance, TSubclassOf<AFGBuildable> BuildableClass, int32 Index)
 		{
-			CARTO_LOG_VERBOSE(TEXT("InvalidateRuntimeInstanceDataForIndex: %s, Skip: %d"), *BuildableClass->GetName(), ShouldInitialize || IsClient);
+			CARTO_LOG_VERBOSE("InvalidateRuntimeInstanceDataForIndex: %s, Skip: %d", *BuildableClass->GetName(), ShouldInitialize || IsClient);
 
 			if (ShouldInitialize || IsClient)
 			{
@@ -353,7 +385,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 	const auto LambdaAfterRemoveBuildable =
 		[this](AFGBuildableSubsystem* Instance, AFGBuildable* Buildable)
 		{
-			CARTO_LOG_VERBOSE(TEXT("RemoveBuildable: %s, Skip: %d"), *Buildable->GetClass()->GetName(), ShouldInitialize || IsClient);
+			CARTO_LOG_VERBOSE("RemoveBuildable: %s, Skip: %d", *Buildable->GetClass()->GetName(), ShouldInitialize || IsClient);
 
 			if (ShouldInitialize || IsClient)
 			{
@@ -422,7 +454,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 
 void UCartographGameInstanceModule::OnWorldLoaded()
 {
-	CARTO_LOG_DEBUG(TEXT("OnWorldLoaded"));
+	CARTO_LOG_DEBUG("OnWorldLoaded");
 
 	ShouldInitialize = true;
 	IsClient = GetWorld()->IsNetMode(NM_Client);
@@ -438,7 +470,7 @@ void UCartographGameInstanceModule::OnWorldLoaded()
 UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
 	TArray<TWeakObjectPtr<AFGBuildable>> Factories, TMap<TSubclassOf<AFGBuildable>, TArray<FRuntimeBuildableInstanceData>> Buildings, FForceLatentCoroutine)
 {
-    CARTO_LOG_DEBUG(TEXT("InitialBuildableGather Started. Factories: %d, Buildings: %d"), Factories.Num(), Buildings.Num());
+    CARTO_LOG_DEBUG("InitialBuildableGather Started. Factories: %d, Buildings: %d", Factories.Num(), Buildings.Num());
 
 	CurrentBuildingData.Empty(Factories.Num() + Buildings.Num());
 
@@ -482,7 +514,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
 		}
 	}
 
-	CARTO_LOG_DEBUG(TEXT("InitialBuildableGather Finished"));
+	CARTO_LOG_DEBUG("InitialBuildableGather Finished");
 
 	IsInitializing = false;
 	IsPendingRedraw = false;
@@ -496,7 +528,7 @@ void UCartographGameInstanceModule::RedrawMap()
 	{
 		if (!IsInitializing)
 		{
-			CARTO_LOG_DEBUG(TEXT("RedrawMapCoroutine Cancel Requested"));
+			CARTO_LOG_DEBUG("RedrawMapCoroutine Cancel Requested");
 			Coroutine.Cancel();
 		}
 		IsPendingRedraw = true;
@@ -517,7 +549,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
         OnCoroutineFinishedOrCancelled();
 	};
 
-	CARTO_LOG_DEBUG(TEXT("RedrawMapCoroutine Started"));
+	CARTO_LOG_DEBUG("RedrawMapCoroutine Started");
 
 	const float TimeBudget = FCartograph_ConfigStruct::GetActiveConfig(GetWorld()).RedrawTimeBudget;
 	UE5Coro::Latent::FTickTimeBudget Budget = UE5Coro::Latent::FTickTimeBudget::Milliseconds(TimeBudget);
@@ -527,7 +559,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 
 		for (FBuildingData& AddedBuildingData : AddedBuildings)
 		{
-	        CARTO_LOG_DEBUG(TEXT("AddedBuilding: %s"), *AddedBuildingData.BuildableClass->GetName());
+	        CARTO_LOG_DEBUG("AddedBuilding: %s", *AddedBuildingData.BuildableClass->GetName());
 
 			const int32 Pos = Algo::LowerBound(CurrentBuildingData, AddedBuildingData);
 			CurrentBuildingData.Insert(std::move(AddedBuildingData), Pos);
@@ -537,7 +569,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 
 	    for (const FBuildingData& RemovedBuildingData : RemovedBuildings)
 	    {
-	        CARTO_LOG_DEBUG(TEXT("RemovedBuilding: %s"), *RemovedBuildingData.BuildableClass->GetName());
+	        CARTO_LOG_DEBUG("RemovedBuilding: %s", *RemovedBuildingData.BuildableClass->GetName());
 
 	        const int32 Start = Algo::LowerBound(CurrentBuildingData, RemovedBuildingData);
 	        const int32 End = Algo::UpperBound(CurrentBuildingData, RemovedBuildingData);
@@ -554,7 +586,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 	        co_await Budget;
 	    }
 
-        CARTO_LOG_DEBUG(TEXT("Buildings Change Processed"));
+        CARTO_LOG_DEBUG("Buildings Change Processed");
 	}
 
 	if (FPlatformProperties::IsServerOnly())
@@ -575,13 +607,13 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 	FCartograph_ConfigStruct ConfigInstance = FCartograph_ConfigStruct::GetActiveConfig(GetWorld());
     for (auto& [_, SplineData] : BuildableSplineDataMap)
     {
-		FProperty* Property = FCartograph_ConfigStruct::StaticStruct()->FindPropertyByName(SplineData.SparsityConfigName);
+		FProperty* Property = FCartograph_ConfigStruct::StaticStruct()->FindPropertyByName(SplineData.SegmentsConfigName);
         if (!Property)
         {
-            UE_LOG(LogCartograph, Error, TEXT("SparsityConfigName not found: %s"), *SplineData.SparsityConfigName.ToString());
+            UE_LOG(LogCartograph, Error, TEXT("SparsityConfigName not found: %s"), *SplineData.SegmentsConfigName.ToString());
             continue;
         }
-		SplineData.SparsityCached = *Property->ContainerPtrToValuePtr<int>(&ConfigInstance);
+		SplineData.SegmentsCached = *Property->ContainerPtrToValuePtr<int>(&ConfigInstance);
     }
 
 	const AFGRecipeManager* RecipeManager = AFGRecipeManager::Get(GetWorld());
@@ -593,7 +625,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 			continue;
 		}
 
-		CARTO_LOG_VERY_VERBOSE(TEXT("Buildable: %s, Transform: %s"), *OriginalBuildableClass->GetName(), *Transform.ToString());
+		CARTO_LOG_VERY_VERBOSE("Buildable: %s, Transform: %s", *OriginalBuildableClass->GetName(), *Transform.ToString());
 
 		const TSoftClassPtr<AFGBuildable>* RedirectClass = BuildableClassRedirectMap.Find(OriginalBuildableClass.Get());
         const TSubclassOf<AFGBuildable> BuildableClass = RedirectClass ? RedirectClass->LoadSynchronous() : OriginalBuildableClass.Get();
@@ -619,26 +651,24 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 				continue;
 			}
 
-			const int SplinePointCount = SplineExtraData->SplinePoints.Num();
+			const int SplinePointCount = SplineExtraData->Spline.Points.Num();
 			if (SplinePointCount < 2)
 			{
 				continue;
 			}
 
-			float PrevInVal = 0;
+			float PrevInVal = SplineExtraData->Spline.Points[0].InVal;
 			for (int i = 1; i < SplinePointCount; i++)
 			{
-				const float InVal = SplineExtraData->SplinePoints[i];
-				const float SegmentLength = InVal - PrevInVal;
-                PrevInVal = InVal;
+				const float InVal = SplineExtraData->Spline.Points[i].InVal;
 
-				const int Segments = FMath::CeilToInt(SegmentLength / SplineData->SparsityCached);
+				const int Segments = SplineData->SegmentsCached;
 				const float Step = 1.f / Segments;
 
 				for (int j = 0; j < Segments; j++)
 				{
-                    const float StartKey = (i - 1) + j * Step;
-                    const float EndKey = (i - 1) + (j + 1) * Step;
+                    const float StartKey = FMath::Lerp(PrevInVal, InVal, j * Step);
+                    const float EndKey = FMath::Lerp(PrevInVal, InVal, (j + 1) * Step);
 
 					const FVector Start = Transform.TransformPosition(SplineExtraData->Spline.Eval(StartKey));
 					const FVector End = Transform.TransformPosition(SplineExtraData->Spline.Eval(EndKey));
@@ -646,6 +676,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 
 					co_await Budget;
 				}
+				PrevInVal = InVal;
 			}
 
 			continue;
@@ -819,13 +850,13 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 		co_await Budget;
 	}
 
-	CARTO_LOG_DEBUG(TEXT("RedrawMapCoroutine Finished"));
+	CARTO_LOG_DEBUG("RedrawMapCoroutine Finished");
 }
 
 
 void UCartographGameInstanceModule::OnCoroutineFinishedOrCancelled()
 {
-    CARTO_LOG_DEBUG(TEXT("OnCoroutineFinishedOrCancelled"));
+    CARTO_LOG_DEBUG("OnCoroutineFinishedOrCancelled");
 
     if (RenderContext.RenderTarget)
     {
@@ -868,11 +899,7 @@ void UCartographGameInstanceModule::AddExtraData(FBuildingData& BuildingData, AF
 		const USplineComponent* SplineComponent = Spline->GetSplineComponent();
 		BuildingData.Transform = SplineComponent->GetComponentTransform();
 
-        const TArray<FInterpCurvePoint<float>>& Points = SplineComponent->SplineCurves.ReparamTable.Points;
-        TArray<float> SplinePoints;
-        Algo::Transform(Points, SplinePoints, [](const FInterpCurvePoint<float>& Point) { return Point.InVal; });
         BuildingData.BuildableExtraData = FSplineExtraData{
-			.SplinePoints = std::move(SplinePoints),
             .Spline = SplineComponent->SplineCurves.Position,
         };
 
@@ -883,6 +910,7 @@ void UCartographGameInstanceModule::AddExtraData(FBuildingData& BuildingData, AF
 	{
 		const auto* Wire = Cast<AFGBuildableWire>(Buildable);
 		BuildingData.Transform.SetLocation(Wire->GetConnectionLocation(0));
+
         BuildingData.BuildableExtraData = FWireExtraData{
             .End = Wire->GetConnectionLocation(1),
         };
@@ -893,6 +921,7 @@ void UCartographGameInstanceModule::AddExtraData(FBuildingData& BuildingData, AF
 	if (BuildableClass->IsChildOf(AFGBuildableBeam::StaticClass()))
 	{
         const auto* Beam = Cast<AFGBuildableBeam>(Buildable);
+
         BuildingData.BuildableExtraData = FBeamExtraData{
             .Length = Beam->GetLength(),
         };
@@ -929,7 +958,8 @@ void UCartographGameInstanceModule::PostCDOContruct()
     {
 		const TSubclassOf<AFGBuildable> Class = StaticLoadClass(AFGBuildable::StaticClass(), nullptr, *AssetPath.ToString());
 		const FString Name = Class->GetName();
-		if (Name.StartsWith("SKEL_") || Name.StartsWith("REINST_"))
+		if (!AssetPath.GetPackageName().ToString().StartsWith("/Game/FactoryGame")
+			|| Name.StartsWith("SKEL_") || Name.StartsWith("REINST_"))
 		{
 			continue;
 		}
@@ -937,7 +967,7 @@ void UCartographGameInstanceModule::PostCDOContruct()
 		const uint32 Hash = TextKeyUtil::HashString(AssetPath.ToString());
 		ClassPtrToClassIDMap.Add(Class, Hash);
 		ClassIDToClassPtrMap.Add(Hash, Class);
-        CARTO_LOG_DEBUG(TEXT("Class: %s, Hash: %u"), *Name, Hash);
+        CARTO_LOG_DEBUG("Path: %s, Class: %s, Hash: %u", *AssetPath.ToString(), *Name, Hash);
     }
 }
 #endif
