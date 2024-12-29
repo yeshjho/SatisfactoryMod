@@ -70,6 +70,9 @@ struct FBuildingData
 };
 
 
+FArchive& operator<<(FArchive& Ar, FBuildingData& BuildingData);
+
+
 template<>
 struct TStructOpsTypeTraits<FBuildingData> : public TStructOpsTypeTraitsBase2<FBuildingData>
 {
@@ -154,8 +157,20 @@ private:
 
 	void AddExtraData(FBuildingData& BuildingData, AFGBuildable* Buildable);
 
+#if WITH_EDITOR
+	virtual void PostCDOContruct() override;
+#endif
 
-protected:
+
+public:
+	inline static UCartographGameInstanceModule* Instance = nullptr;
+
+	UPROPERTY(EditDefaultsOnly)
+    TMap<uint32, TSubclassOf<AFGBuildable>> ClassIDToClassPtrMap;
+	UPROPERTY(EditDefaultsOnly)
+    TMap<TSubclassOf<AFGBuildable>, uint32> ClassPtrToClassIDMap;
+
+
 	UPROPERTY(EditDefaultsOnly)
 	TMap<TSoftClassPtr<UFGBuildCategory>, FCategoryData> BuildCategoryDataMap;
 
@@ -183,6 +198,7 @@ protected:
 	UPROPERTY(EditDefaultsOnly)
 	TMap<TSoftClassPtr<AFGBuildable>, TSoftClassPtr<AFGBuildable>> BuildableClassRedirectMap;
 
+protected:
 	UPROPERTY(EditDefaultsOnly)
 	TObjectPtr<UCanvasRenderTarget2D> RenderTarget;
 

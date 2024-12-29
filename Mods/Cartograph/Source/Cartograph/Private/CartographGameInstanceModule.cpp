@@ -1,5 +1,6 @@
 #include "CartographGameInstanceModule.h"
 
+#include "AssetRegistryModule.h"
 #include "CanvasItem.h"
 #include "Engine/Canvas.h"
 #include "Engine/CanvasRenderTarget2D.h"
@@ -91,7 +92,7 @@ FArchive& operator<<(FArchive& Ar, FSplineExtraData& SplineData)
 
 FArchive& operator<<(FArchive& Ar, FWireExtraData& WireData)
 {
-    Ar << WireData.End;
+	SerializePackedVector<10, 27>(WireData.End, Ar);
 	return Ar;
 }
 
@@ -105,7 +106,36 @@ FArchive& operator<<(FArchive& Ar, FBeamExtraData& BeamData)
 
 bool FBuildingData::NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess)
 {
-    Ar << BuildableClass;
+	// We'll serialize the class name since deserializing UObject* from pure memory is such a pain.
+	// Hashing it to reduce the size.
+
+	if (!Ar.IsLoading())  // Serialize
+	{
+		if (uint32* ClassIDHash = UCartographGameInstanceModule::Instance->ClassPtrToClassIDMap.Find(BuildableClass))
+		{
+			Ar.SerializeBits(ClassIDHash, 32);
+		}
+		else
+		{
+            UE_LOG(LogCartograph, Error, TEXT("Class %s not found in ClassPtrToClassIDMap"), *BuildableClass->GetName());
+            bOutSuccess = false;
+		}
+	}
+    else  // Deserialize
+	{
+		uint32 ClassIDHash;
+		Ar.SerializeBits(&ClassIDHash, 32);
+        if (const TSubclassOf<AFGBuildable>* Class = UCartographGameInstanceModule::Instance->ClassIDToClassPtrMap.Find(ClassIDHash))
+        {
+            BuildableClass = *Class;
+        }
+        else
+        {
+            UE_LOG(LogCartograph, Error, TEXT("Class ID %llu not found in ClassIDToClassPtrMap"), ClassIDHash);
+            bOutSuccess = false;
+        }
+	}
+
     Ar << Transform;
     //Ar << CustomizationData;
 
@@ -165,6 +195,14 @@ bool FBuildingData::operator==(const FBuildingData& Other) const noexcept
 }
 
 
+FArchive& operator<<(FArchive& Ar, FBuildingData& BuildingData)
+{
+	bool _;
+    BuildingData.NetSerialize(Ar, nullptr, _);
+    return Ar;
+}
+
+
 void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase)
 {
 	Super::DispatchLifecycleEvent(Phase);
@@ -173,6 +211,9 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
     {
         return;
     }
+
+
+	Instance = this;
 
 
 	for (const auto& [Material, CategoryData] : MaterialBuildCategoryDataOverrideMap)
@@ -359,9 +400,11 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
         };
 
 
-	// Single player or non-dedicated host
+	// Called only when single player or host
 	SUBSCRIBE_UOBJECT_METHOD_AFTER(UFGSaveSession, LoadGame, LambdaAfterLoadGame);
 
+	// Doing it after PlayerController::BeginPlay would interfere other network packets,
+    // resulting higher chance of packet loss (due to timeout)
 	SUBSCRIBE_UOBJECT_METHOD_AFTER(AFGHUD, CloseRespawnUI, LambdaAfterCloseRespawnUI);
 
 
@@ -458,7 +501,7 @@ void UCartographGameInstanceModule::RedrawMap()
 		}
 		IsPendingRedraw = true;
 	}
-	else
+	else if (!IsClient || !IsInitializing)
 	{
 		ExecuteRedrawMapCoroutine();
 	}
@@ -545,10 +588,15 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 
 	for (const auto& [OriginalBuildableClass, Transform/*, CustomizationData*/, BuildableExtraData] : CurrentBuildingData)
 	{
+		if (!OriginalBuildableClass)
+		{
+			continue;
+		}
+
 		CARTO_LOG_VERY_VERBOSE(TEXT("Buildable: %s, Transform: %s"), *OriginalBuildableClass->GetName(), *Transform.ToString());
 
 		const TSoftClassPtr<AFGBuildable>* RedirectClass = BuildableClassRedirectMap.Find(OriginalBuildableClass.Get());
-        const TSubclassOf<AFGBuildable> BuildableClass = RedirectClass ? RedirectClass->Get() : OriginalBuildableClass.Get();
+        const TSubclassOf<AFGBuildable> BuildableClass = RedirectClass ? RedirectClass->LoadSynchronous() : OriginalBuildableClass.Get();
 
 		if (BuildableClass->ImplementsInterface(UFGSplineBuildableInterface::StaticClass()))
 		{
@@ -852,3 +900,44 @@ void UCartographGameInstanceModule::AddExtraData(FBuildingData& BuildingData, AF
 		return;
 	}
 }
+
+
+#if WITH_EDITOR
+void UCartographGameInstanceModule::PostCDOContruct()
+{
+	// Need to redo it every time the game is updated.
+	return;
+
+    ClassIDToClassPtrMap.Empty();
+    ClassPtrToClassIDMap.Empty();
+
+	TArray<UClass*> NativeRootClasses;
+	NativeRootClasses.Add(AFGBuildable::StaticClass());
+	GetDerivedClasses(AFGBuildable::StaticClass(), NativeRootClasses);
+
+	TArray<FTopLevelAssetPath> NativeRootClassPaths;
+
+	Algo::TransformIf(NativeRootClasses, 
+		NativeRootClassPaths, 
+		[](const UClass* RootClass) { return RootClass && RootClass->HasAnyClassFlags(CLASS_Native); }, 
+		&UClass::GetClassPathName);
+
+	TSet<FTopLevelAssetPath> AllClassPaths;
+	IAssetRegistry::Get()->GetDerivedClassNames(NativeRootClassPaths, {}, AllClassPaths);
+
+    for (const FTopLevelAssetPath& AssetPath : AllClassPaths)
+    {
+		const TSubclassOf<AFGBuildable> Class = StaticLoadClass(AFGBuildable::StaticClass(), nullptr, *AssetPath.ToString());
+		const FString Name = Class->GetName();
+		if (Name.StartsWith("SKEL_") || Name.StartsWith("REINST_"))
+		{
+			continue;
+		}
+
+		const uint32 Hash = TextKeyUtil::HashString(AssetPath.ToString());
+		ClassPtrToClassIDMap.Add(Class, Hash);
+		ClassIDToClassPtrMap.Add(Hash, Class);
+        CARTO_LOG_DEBUG(TEXT("Class: %s, Hash: %u"), *Name, Hash);
+    }
+}
+#endif

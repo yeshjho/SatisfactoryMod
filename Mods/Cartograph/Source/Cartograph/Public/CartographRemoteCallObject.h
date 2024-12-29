@@ -3,8 +3,7 @@
 #include "FGRemoteCallObject.h"
 
 #include "CoreMinimal.h"
-
-#include "UE5Coro/UE5Coro.h"
+#include "BufferWriter.h"
 
 #include "CartographGameInstanceModule.h"
 
@@ -13,8 +12,8 @@
 
 struct FInitialBuildingDataToSend
 {
-    TArray<FBuildingData> InitialBuildingData;
-	int Slices;
+	FBufferWriter InitialBuildingData;
+	int64_t Slices;
 	int LastSentSlice;
     FTimerHandle TimerHandle;
 };
@@ -26,6 +25,32 @@ enum class EInitialDataSendPhase
 	Initial,
 	Normal,
 	Finished
+};
+
+
+// We'll take up all the bandwidth if this value is not small enough,
+// resulting the client not being able to do anything while initializing.
+constexpr int BuildingDataBufferMaxSize = std::numeric_limits<uint16_t>::max() / 32;
+
+
+USTRUCT()
+struct FBuildingDataBuffer
+{
+	GENERATED_BODY()
+
+    uint8 Data[BuildingDataBufferMaxSize];
+
+	bool NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess);
+};
+
+
+template<>
+struct TStructOpsTypeTraits<FBuildingDataBuffer> : public TStructOpsTypeTraitsBase2<FBuildingDataBuffer>
+{
+	enum
+	{
+		WithNetSerializer = true
+	};
 };
 
 
@@ -48,10 +73,11 @@ private:
 	void ServerRequestInitialBuildingData_Implementation(APlayerController* PlayerController, EInitialDataSendPhase SendPhase);
 
 	UFUNCTION(Client, Reliable)
-	void ClientReceiveInitialBuildingData(const TArray<FBuildingData>& Array, bool IsLast);
-	void ClientReceiveInitialBuildingData_Implementation(const TArray<FBuildingData>& Array, bool IsLast);
+	void ClientReceiveInitialBuildingData(const FBuildingDataBuffer& Array, int Size, bool IsLast);
+	void ClientReceiveInitialBuildingData_Implementation(const FBuildingDataBuffer& Array, int Size, bool IsLast);
 
-	UE5Coro::TCoroutine<> SendInitialBuildingData(TArray<FBuildingData> BuildingData, FForceLatentCoroutine = {});
+
+	UE5Coro::TCoroutine<> InitialBuildableDeserialize(FForceLatentCoroutine = {});
 
 
 protected:
@@ -59,6 +85,8 @@ protected:
 	bool bDummy = true;
 
 	TMap<APlayerController*, FInitialBuildingDataToSend> InitialBuildingDataToSendPerPlayer;
+
+    TArray<uint8> Buffer;
 
     UCartographGameInstanceModule* GameInstanceModule = nullptr;
 };
