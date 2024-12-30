@@ -18,4 +18,5 @@ class CARTOGRAPH_API UCartographGameWorldModule : public UGameWorldModule
 
 public:
 	virtual void DispatchLifecycleEvent(ELifecyclePhase Phase) override;
+	virtual void BeginDestroy() override;
 };

@@ -197,6 +197,7 @@ public:
 	virtual void DispatchLifecycleEvent(ELifecyclePhase Phase) override;
 
 	void OnWorldLoaded();
+	void OnWorldUnloaded();
 
 private:
 	UE5Coro::TCoroutine<> InitialBuildableGather(TArray<TWeakObjectPtr<AFGBuildable>> Factories, TMap<TSubclassOf<AFGBuildable>, TArray<FRuntimeBuildableInstanceData>> Buildings, FForceLatentCoroutine = {});
@@ -209,6 +210,7 @@ private:
 
 	void AddExtraData(FBuildingData& BuildingData, AFGBuildable* Buildable);
 
+	UFUNCTION()
 	void AfterSplineSegmentsModified();
 
 #if WITH_EDITOR
@@ -271,6 +273,6 @@ protected:
 	TArray<FBuildingData> PendingAddBuildingData;
 	TArray<FBuildingData> PendingRemoveBuildingData;
 
-
+	bool IsInWorld = false;
     bool IsClient = false;
 };

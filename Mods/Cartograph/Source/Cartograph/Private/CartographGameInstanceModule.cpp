@@ -585,6 +585,18 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 
 	AfterSplineSegmentsModified();
 
+	// Wanted to do this in Blueprint, inheriting BP_CP_Int, but couldn't get the module manager there.
+	const FConfigId ConfigId{ "Cartograph", "" };
+	const UConfigManager* ConfigManager = GetWorld()->GetGameInstance()->GetSubsystem<UConfigManager>();
+	const UConfigPropertySection* RootSection = ConfigManager->GetConfigurationRootSection(ConfigId);
+	for (const auto& [Name, Property] : RootSection->SectionProperties)
+	{
+		if (Name.EndsWith("Segments"))
+		{
+            Property->OnPropertyValueChanged.AddDynamic(this, &UCartographGameInstanceModule::AfterSplineSegmentsModified);
+		}
+	}
+
 
 	const auto LambdaAfterLoadGame =
 		[this](bool ReturnValue, UFGSaveSession* Instance, const FString& SaveName)
@@ -785,6 +797,7 @@ void UCartographGameInstanceModule::OnWorldLoaded()
 {
 	CARTO_LOG_DEBUG("OnWorldLoaded");
 
+    IsInWorld = true;
 	ShouldInitialize = true;
 	IsClient = GetWorld()->IsNetMode(NM_Client);
 
@@ -792,6 +805,14 @@ void UCartographGameInstanceModule::OnWorldLoaded()
 	{
 		UKismetRenderingLibrary::ClearRenderTarget2D(this, RenderTarget, { 0, 0, 0, 0 });
 	}
+}
+
+
+void UCartographGameInstanceModule::OnWorldUnloaded()
+{
+	CARTO_LOG_DEBUG("OnWorldUnloaded");
+
+	IsInWorld = false;
 }
 
 
@@ -1190,10 +1211,17 @@ void UCartographGameInstanceModule::AfterSplineSegmentsModified()
 		SplineData.SegmentsCached = *Property->ContainerPtrToValuePtr<int>(&ConfigInstance);
 	}
 
+	if (!IsInWorld)
+	{
+		return;
+	}
+
     for (FBuildingData& BuildingData : CurrentBuildingData)
     {
         BuildingData.CalculateSplinePoints();
     }
+
+	RedrawMap();
 }
 
 
