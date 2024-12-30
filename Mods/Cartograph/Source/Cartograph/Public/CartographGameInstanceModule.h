@@ -53,20 +53,69 @@ struct FBeamExtraData
 };
 
 
+enum class EBuildingDataType
+{
+	Invalid = 0,
+
+	Icon = 1 << 0,
+	Rectangle = 1 << 1,
+	Spline = 1 << 2,
+	Wire = 1 << 3,
+	Beam = 1 << 4,
+
+    Normal = Icon | Rectangle,
+    Special = Spline | Wire | Beam,
+};
+ENUM_CLASS_FLAGS(EBuildingDataType)
+
+
+struct FRectangleDataCache
+{
+    const struct FCategoryData* CategoryData;
+	FVector LocalCorners[4];
+};
+
+
+struct FNormalDataCache
+{
+	FVector2D ScreenPosition;
+	FVector2D Size;
+	FRotator Rotation;
+	std::variant<TSoftObjectPtr<UTexture2D>, FRectangleDataCache> IconOrRectangleData;
+};
+
+
+struct FSplineDataCache
+{
+    const struct FSplineData* SplineData;
+	TArray<FVector2D> StartPoints;
+    TArray<FVector2D> EndPoints;
+};
+
+
 USTRUCT()
 struct FBuildingData
 {
 	GENERATED_BODY()
 
-    TSubclassOf<AFGBuildable> BuildableClass;
+	uint32 BuildableClassHash = 0;
 	FTransform Transform;
 	//FFactoryCustomizationData CustomizationData;
 	std::variant<std::monostate, FSplineExtraData, FWireExtraData, FBeamExtraData> BuildableExtraData;
 
+
+    EBuildingDataType DataType = EBuildingDataType::Invalid;
+	std::variant<FNormalDataCache, FSplineDataCache, const struct FWireData*> DataCache;
+
     bool NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess);
 
 	bool operator==(const FBuildingData& Other) const noexcept;
-	auto operator<=>(const FBuildingData& Other) const noexcept;
+	std::partial_ordering operator<=>(const FBuildingData& Other) const noexcept;
+
+	void FillInCache(TSubclassOf<AFGBuildable> OriginalBuildableClass);  // Call it after filling in the extra data
+    void FillInHash(TSubclassOf<AFGBuildable> BuildableClass);  // Call it after filling in the extra data
+	void FillInHashAndCache(TSubclassOf<AFGBuildable> BuildableClass);  // Call it after filling in the extra data
+    void CalculateSplinePoints();  // Call it after filling in the extra data & cache
 };
 
 
@@ -159,6 +208,8 @@ private:
 	void ExecuteRedrawMapCoroutine();
 
 	void AddExtraData(FBuildingData& BuildingData, AFGBuildable* Buildable);
+
+	void AfterSplineSegmentsModified();
 
 #if WITH_EDITOR
 	virtual void PostCDOContruct() override;

@@ -75,7 +75,16 @@ void draw_line(UCanvas* Canvas, const T& WorldStart, const U& WorldEnd, const FL
 }
 
 
-auto FBuildingData::operator<=>(const FBuildingData& Other) const noexcept
+// This is used for actual equality check while removing
+bool FBuildingData::operator==(const FBuildingData& Other) const noexcept
+{
+	return BuildableClassHash == Other.BuildableClassHash && Transform.Equals(Other.Transform) && BuildableExtraData == Other.BuildableExtraData;
+	// Ignoring CustomizationData on purpose
+}
+
+
+// This is used for sorting, so we only compare Z values
+std::partial_ordering FBuildingData::operator<=>(const FBuildingData& Other) const noexcept
 {
 	return Transform.GetLocation().Z <=> Other.Transform.GetLocation().Z;
 }
@@ -184,34 +193,7 @@ FArchive& operator<<(FArchive& Ar, FBeamExtraData& BeamData)
 
 bool FBuildingData::NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess)
 {
-	// We'll serialize the class name since deserializing UObject* from pure memory is such a pain.
-	// Hashing it to reduce the size.
-
-	uint32 ClassIDHash = 0;
-	if (!Ar.IsLoading())  // Serialize
-	{
-		if (const uint32* ClassID = UCartographGameInstanceModule::Instance->ClassPtrToClassIDMap.Find(BuildableClass))
-        {
-            ClassIDHash = *ClassID;
-		}
-		else
-		{
-            UE_LOG(LogCartograph, Warning, TEXT("Class %s not found in ClassPtrToClassIDMap"), *BuildableClass->GetName());
-		}
-		Ar.SerializeBits(&ClassIDHash, 32);
-	}
-    else  // Deserialize
-	{
-		Ar.SerializeBits(&ClassIDHash, 32);
-        if (const TSubclassOf<AFGBuildable>* Class = UCartographGameInstanceModule::Instance->ClassIDToClassPtrMap.Find(ClassIDHash))
-        {
-            BuildableClass = *Class;
-        }
-        else
-        {
-            UE_LOG(LogCartograph, Warning, TEXT("Class ID %u not found in ClassIDToClassPtrMap"), ClassIDHash);
-        }
-	}
+	Ar.SerializeBits(&BuildableClassHash, 32);
 
 	if (!Ar.IsLoading())  // Serialize
 	{
@@ -278,19 +260,293 @@ bool FBuildingData::NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSucce
 			break;
 		}
         default:
-            bOutSuccess = false;
-            return false;
+			break;
         }
     }
+
+	if (Ar.IsLoading())
+	{
+		if (const TSubclassOf<AFGBuildable>* Class = UCartographGameInstanceModule::Instance->ClassIDToClassPtrMap.Find(BuildableClassHash))
+		{
+			FillInCache(*Class);
+		}
+		else
+		{
+			UE_LOG(LogCartograph, Warning, TEXT("Class ID %u not found in ClassIDToClassPtrMap"), BuildableClassHash);
+		}
+	}
+
     bOutSuccess = true;
     return true;
 }
 
 
-bool FBuildingData::operator==(const FBuildingData& Other) const noexcept
+void FBuildingData::FillInCache(TSubclassOf<AFGBuildable> OriginalBuildableClass)
 {
-    return BuildableClass == Other.BuildableClass && Transform.Equals(Other.Transform) && BuildableExtraData == Other.BuildableExtraData;
-    // Ignoring CustomizationData on purpose
+    DataType = EBuildingDataType::Invalid;
+
+	const auto& BuildableClassRedirectMap = UCartographGameInstanceModule::Instance->BuildableClassRedirectMap;
+	const TSoftClassPtr<AFGBuildable>* RedirectClass = BuildableClassRedirectMap.Find(OriginalBuildableClass.Get());
+	const TSubclassOf<AFGBuildable> BuildableClass = RedirectClass ? RedirectClass->LoadSynchronous() : OriginalBuildableClass.Get();
+
+	if (BuildableClass->ImplementsInterface(UFGSplineBuildableInterface::StaticClass()))
+	{
+		const auto& BuildableSplineDataMap = UCartographGameInstanceModule::Instance->BuildableSplineDataMap;
+
+		const FSplineData* SplineData = BuildableSplineDataMap.Find(BuildableClass.Get());
+		if (!SplineData)
+		{
+			UE_LOG(LogCartograph, Warning, TEXT("Can't find spline data for %s"), *BuildableClass->GetName());
+			return;
+		}
+
+		if (SplineData->Thickness <= 0)  // We don't need to draw, so don't even bother initializing the data cache.
+		{
+			return;
+		}
+
+		const FSplineExtraData* SplineExtraData = std::get_if<FSplineExtraData>(&BuildableExtraData);
+		if (!SplineExtraData)
+		{
+			UE_LOG(LogCartograph, Error, TEXT("Can't find spline extra data"));
+			return;
+		}
+
+		if (const int SplinePointCount = SplineExtraData->SplinePoints.Num();
+			SplinePointCount < 2)  // This should never happen, but just in case.
+		{
+			return;
+		}
+
+        DataType = EBuildingDataType::Spline;
+		DataCache = FSplineDataCache{
+			.SplineData = SplineData,
+		};
+        CalculateSplinePoints();
+		return;
+	}
+
+	if (BuildableClass->IsChildOf(AFGBuildableWire::StaticClass()))
+	{
+		const auto& BuildableWireDataMap = UCartographGameInstanceModule::Instance->BuildableWireDataMap;
+
+		const FWireData* WireData = BuildableWireDataMap.Find(BuildableClass.Get());
+		if (!WireData)
+		{
+			UE_LOG(LogCartograph, Warning, TEXT("Can't find wire data for %s"), *BuildableClass->GetName());
+			return;
+		}
+
+		if (WireData->Thickness <= 0)  // We don't need to draw, so don't even bother initializing the data cache.
+		{
+			return;
+		}
+
+		DataType = EBuildingDataType::Wire;
+		DataCache = WireData;
+		return;
+	}
+
+	if (BuildableClass->IsChildOf(AFGBuildableBeam::StaticClass()))
+	{
+		const auto& BuildableWireDataMap = UCartographGameInstanceModule::Instance->BuildableWireDataMap;
+
+		const FWireData* BeamData = BuildableWireDataMap.Find(BuildableClass.Get());
+		if (!BeamData)
+		{
+			UE_LOG(LogCartograph, Warning, TEXT("Can't find beam data for %s"), *BuildableClass->GetName());
+			return;
+		}
+
+		if (BeamData->Thickness <= 0)  // We don't need to draw, so don't even bother initializing the data cache.
+		{
+			return;
+		}
+
+		DataType = EBuildingDataType::Beam;
+		DataCache = BeamData;
+		return;
+	}
+
+
+	auto& BuildableSizeOverrideMap = UCartographGameInstanceModule::Instance->BuildableSizeOverrideMap;
+	FVector2D* Size = BuildableSizeOverrideMap.Find(BuildableClass.Get());
+	if (!Size)
+	{
+		const FBox ClearanceBox = Cast<AFGBuildable>(BuildableClass->ClassDefaultObject)->GetCombinedClearanceBox();
+		if (!ClearanceBox.IsValid)
+		{
+			UE_LOG(LogCartograph, Warning, TEXT("Can't find size for %s"), *BuildableClass->GetName());
+			return;
+		}
+
+		FVector2D ClearanceBoxSize{ ClearanceBox.GetSize() };
+		Size = &ClearanceBoxSize;
+	}
+	if (Size->X == 0.f || Size->Y == 0.f)  // We don't need to draw, so don't even bother initializing the data cache.
+	{
+		return;
+	}
+	*Size *= FVector2D{ Transform.GetScale3D() };
+
+	FRotator Rotation = Transform.GetRotation().Rotator();
+	auto& BuildableExtraRotationMap = UCartographGameInstanceModule::Instance->BuildableExtraRotationMap;
+    if (const FRotator* ExtraRotation = BuildableExtraRotationMap.Find(BuildableClass.Get()))
+    {
+        Rotation += *ExtraRotation;
+    }
+
+	const FVector2D ScreenPosition = world_position_to_screen_position(Transform.GetLocation(), *Size);
+
+	auto& BuildableIconOverrideMap = UCartographGameInstanceModule::Instance->BuildableIconOverrideMap;
+	if (const TSoftObjectPtr<UTexture2D>* Texture = BuildableIconOverrideMap.Find(BuildableClass.Get());
+		Texture && !Texture->IsNull())
+	{
+        DataType = EBuildingDataType::Icon;
+        DataCache = FNormalDataCache{
+            .ScreenPosition = ScreenPosition,
+            .Size = *Size,
+            .Rotation = Rotation,
+            .IconOrRectangleData = *Texture,
+        };
+
+		return;
+	}
+
+
+	auto& BuildableBuildCategoryDataOverrideMap = UCartographGameInstanceModule::Instance->BuildableBuildCategoryDataOverrideMap;
+	const FCategoryData* CategoryData = BuildableBuildCategoryDataOverrideMap.Find(BuildableClass.Get());
+	if (!CategoryData)
+	{
+		auto& BuildCategoryDataMap = UCartographGameInstanceModule::Instance->BuildCategoryDataMap;
+		const AFGRecipeManager* RecipeManager = AFGRecipeManager::Get(UCartographGameInstanceModule::Instance->GetWorld());
+		const TSubclassOf<UFGBuildingDescriptor> Descriptor = RecipeManager->FindBuildingDescriptorByClass(BuildableClass);
+		if (TArray<TSubclassOf<UFGCategory>> Subcategories = UFGItemDescriptor::GetSubCategoriesOfClass(Descriptor, UFGBuildSubCategory::StaticClass());
+			!Subcategories.IsEmpty())
+		{
+			CategoryData = BuildCategoryDataMap.Find(Subcategories[0].Get());
+		}
+		if (!CategoryData)
+		{
+			const TSubclassOf<UFGBuildCategory> Category = UFGBuildingDescriptor::GetBuildCategory(Descriptor);
+			CategoryData = BuildCategoryDataMap.Find(Category.Get());
+		}
+	}
+	if (!CategoryData)
+	{
+		UE_LOG(LogCartograph, Warning, TEXT("Can't find category data for %s"), *BuildableClass->GetName());
+		return;
+	}
+
+	FRectangleDataCache RectangleData{
+		.CategoryData = CategoryData,
+	};
+
+	const float HalfWidth = Size->X / 2;
+	const float HalfHeight = Size->Y / 2;
+	RectangleData.LocalCorners[0] = { -HalfWidth, -HalfHeight, 0 };
+    RectangleData.LocalCorners[1] = { HalfWidth, -HalfHeight, 0 };
+    RectangleData.LocalCorners[2] = { HalfWidth, HalfHeight, 0 };
+    RectangleData.LocalCorners[3] = { -HalfWidth, HalfHeight, 0 };
+
+	FTransform TransformNoScale = Transform;
+	TransformNoScale.SetScale3D(FVector::OneVector);
+	for (FVector& Corner : RectangleData.LocalCorners)
+	{
+		Corner = TransformNoScale.TransformPosition(Corner);
+	}
+
+    DataType = EBuildingDataType::Rectangle;
+	DataCache = FNormalDataCache{
+		.ScreenPosition = ScreenPosition,
+		.Size = *Size,
+		.Rotation = Rotation,
+		.IconOrRectangleData = std::move(RectangleData),
+	};
+}
+
+
+void FBuildingData::FillInHash(TSubclassOf<AFGBuildable> BuildableClass)
+{
+	if (const uint32* Hash = UCartographGameInstanceModule::Instance->ClassPtrToClassIDMap.Find(BuildableClass))
+	{
+		BuildableClassHash = *Hash;
+	}
+	else
+	{
+		UE_LOG(LogCartograph, Warning, TEXT("Class %s not found in ClassPtrToClassIDMap"), *BuildableClass->GetName());
+	}
+}
+
+
+void FBuildingData::FillInHashAndCache(TSubclassOf<AFGBuildable> BuildableClass)
+{
+    FillInHash(BuildableClass);
+	if (BuildableClassHash != 0)
+	{
+		FillInCache(BuildableClass);
+	}
+	else
+	{
+		DataType = EBuildingDataType::Invalid;
+	}
+}
+
+
+void FBuildingData::CalculateSplinePoints()
+{
+    if (DataType != EBuildingDataType::Spline)
+    {
+        return;
+    }
+
+    auto& [SplineData, StartPoints, EndPoints] = std::get<FSplineDataCache>(DataCache);
+	const FSplineExtraData* SplineExtraData = std::get_if<FSplineExtraData>(&BuildableExtraData);
+	if (!SplineExtraData)
+	{
+		UE_LOG(LogCartograph, Error, TEXT("Can't find spline extra data"));
+		return;
+	}
+
+	const int SplinePointCount = SplineExtraData->SplinePoints.Num();
+	if (SplinePointCount < 2)  // This should never happen, but just in case.
+	{
+		return;
+	}
+
+	const int Segments = SplineData->SegmentsCached;
+	const float Step = 1.f / Segments;
+
+	const std::pair<TArray<FVector2D>, TArray<FVector2D>>* Tangents = SplineExtraData->Tangents.GetPtrOrNull();
+
+    StartPoints.Empty(SplinePointCount * Segments);
+    EndPoints.Empty(SplinePointCount * Segments);
+	for (int i = 1; i < SplinePointCount; i++)
+	{
+		const FVector2D& PrevPoint = SplineExtraData->SplinePoints[i - 1];
+		const FVector2D& NextPoint = SplineExtraData->SplinePoints[i];
+
+		for (int j = 0; j < Segments; j++)
+		{
+			if (SplineData->UseTangents)
+			{
+				const FVector2D& LeaveTangent = Tangents->first[i - 1];
+				const FVector2D& ArriveTangent = Tangents->second[i];
+
+				StartPoints.Add(FVector2D{ Transform.TransformPosition(FVector{
+					FMath::CubicInterp(PrevPoint, LeaveTangent, NextPoint, ArriveTangent, j * Step), 0 }) });
+				EndPoints.Add(FVector2D{ Transform.TransformPosition(FVector{
+					FMath::CubicInterp(PrevPoint, LeaveTangent, NextPoint, ArriveTangent, (j + 1) * Step), 0 }) });
+			}
+			else
+			{
+				StartPoints.Add(FVector2D{ Transform.TransformPosition(FVector{
+					FMath::Lerp(PrevPoint, NextPoint, j * Step), 0 }) });
+				EndPoints.Add(FVector2D{ Transform.TransformPosition(FVector{
+					FMath::Lerp(PrevPoint, NextPoint, (j + 1) * Step), 0 }) });
+			}
+		}
+	}
 }
 
 
@@ -326,7 +582,9 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 			}
 		}
 	}
-	
+
+	AfterSplineSegmentsModified();
+
 
 	const auto LambdaAfterLoadGame =
 		[this](bool ReturnValue, UFGSaveSession* Instance, const FString& SaveName)
@@ -371,10 +629,10 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 			}
 
 			FBuildingData Data{
-					.BuildableClass = BuildableClass,
 					.Transform = BuildableInstanceData.Transform,
 					//.CustomizationData = BuildableInstanceData.CustomizationData,
 			};
+            Data.FillInHashAndCache(BuildableClass);
 			PendingAddBuildingData.Add(std::move(Data));
 
 			RedrawMap();
@@ -394,10 +652,10 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 			}
 
 			FBuildingData Data{
-					.BuildableClass = BuildableClass,
 					.Transform = ReplicationData.Transform,
 					//.CustomizationData = ReplicationData.CustomizationData,
 			};
+			Data.FillInHashAndCache(BuildableClass);
 			PendingAddBuildingData.Add(std::move(Data));
 
 			RedrawMap();
@@ -415,11 +673,11 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 			}
 
 			FBuildingData Data{
-					.BuildableClass = Buildable->GetClass(),
 					.Transform = Buildable->GetTransform(),
 					//.CustomizationData = Buildable->GetCustomizationData_Native(),
 			};
 			AddExtraData(Data, Buildable);
+			Data.FillInHashAndCache(Buildable->GetClass());
 			PendingAddBuildingData.Add(std::move(Data));
 
 			RedrawMap();
@@ -439,10 +697,11 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 			const FRuntimeBuildableInstanceData* LightweightData = Instance->GetRuntimeDataForBuildableClassAndIndex(BuildableClass, Index);
 
 			FBuildingData Data{
-					.BuildableClass = BuildableClass,
 					.Transform = LightweightData->Transform,
 					//.CustomizationData = Data->CustomizationData,
 			};
+			//Data.FillInHashAndCache(BuildableClass);  // Cache are not used in comparison (==, <=>) so we don't need to fill it
+			Data.FillInHash(BuildableClass);
             PendingRemoveBuildingData.Add(std::move(Data));
 
 			RedrawMap();
@@ -460,11 +719,12 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 			}
 
             FBuildingData Data{
-                    .BuildableClass = Buildable->GetClass(),
                     .Transform = Buildable->GetTransform(),
                     //.CustomizationData = Buildable->GetCustomizationData_Native(),
             };
 			AddExtraData(Data, Buildable);
+            //Data.FillInHashAndCache(Buildable->GetClass());  // Cache are not used in comparison (==, <=>) so we don't need to fill it
+			Data.FillInHash(Buildable->GetClass());
 			PendingRemoveBuildingData.Add(std::move(Data));
 
 			RedrawMap();
@@ -563,11 +823,11 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
 		}
 		
 		FBuildingData NewBuildingData{
-			.BuildableClass = Factory->GetClass(),
 			.Transform = Factory->GetTransform(),
             //.CustomizationData = Factory->GetCustomizationData_Native(),
 		};
         AddExtraData(NewBuildingData, Factory.Get());
+		NewBuildingData.FillInHashAndCache(Factory->GetClass());
 
 		const int32 Pos = Algo::LowerBound(CurrentBuildingData, NewBuildingData);
 		CurrentBuildingData.Insert(std::move(NewBuildingData), Pos);
@@ -581,10 +841,10 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
 		for (const FRuntimeBuildableInstanceData& InstanceData : Arr)
 		{
 			FBuildingData NewBuildingData{
-				.BuildableClass = Type,
 				.Transform = InstanceData.Transform,
 				//.CustomizationData = InstanceData.CustomizationData,
 			};
+			NewBuildingData.FillInHashAndCache(Type);
 
 			const int32 Pos = Algo::LowerBound(CurrentBuildingData, NewBuildingData);
 			CurrentBuildingData.Insert(std::move(NewBuildingData), Pos);
@@ -639,7 +899,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 
 		for (FBuildingData& AddedBuildingData : AddedBuildings)
 		{
-	        CARTO_LOG_DEBUG("AddedBuilding: %s", *AddedBuildingData.BuildableClass->GetName());
+	        CARTO_LOG_DEBUG("AddedBuilding: %u", AddedBuildingData.BuildableClassHash);
 
 			const int32 Pos = Algo::LowerBound(CurrentBuildingData, AddedBuildingData);
 			CurrentBuildingData.Insert(std::move(AddedBuildingData), Pos);
@@ -649,18 +909,23 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 
 	    for (const FBuildingData& RemovedBuildingData : RemovedBuildings)
 	    {
-	        CARTO_LOG_DEBUG("RemovedBuilding: %s", *RemovedBuildingData.BuildableClass->GetName());
+	        CARTO_LOG_DEBUG("RemovedBuilding: %u", RemovedBuildingData.BuildableClassHash);
 
 	        const int32 Start = Algo::LowerBound(CurrentBuildingData, RemovedBuildingData);
-	        const int32 End = Algo::UpperBound(CurrentBuildingData, RemovedBuildingData);
+            const int32 End = CurrentBuildingData.Num();
 
 	        for (int32 i = Start; i < End; ++i)
 	        {
-	            if (CurrentBuildingData[i] == RemovedBuildingData)
+	            if (RemovedBuildingData == CurrentBuildingData[i])
 	            {
 					CurrentBuildingData.RemoveAt(i);
 	                break;
 	            }
+                if (RemovedBuildingData > CurrentBuildingData[i])
+                {
+                    UE_LOG(LogCartograph, Warning, TEXT("Can't find removed building data"));
+                    break;
+                }
 	        }
 
 	        co_await Budget;
@@ -684,263 +949,125 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 	FVector2D _;
 	UKismetRenderingLibrary::BeginDrawCanvasToRenderTarget(this, RenderTarget, Canvas, _, RenderContext);
 
-	FCartograph_ConfigStruct ConfigInstance = FCartograph_ConfigStruct::GetActiveConfig(GetWorld());
-    for (auto& [_, SplineData] : BuildableSplineDataMap)
-    {
-		FProperty* Property = FCartograph_ConfigStruct::StaticStruct()->FindPropertyByName(SplineData.SegmentsConfigName);
-        if (!Property)
-        {
-            UE_LOG(LogCartograph, Error, TEXT("SparsityConfigName not found: %s"), *SplineData.SegmentsConfigName.ToString());
-            continue;
-        }
-		SplineData.SegmentsCached = *Property->ContainerPtrToValuePtr<int>(&ConfigInstance);
-    }
-
-	const AFGRecipeManager* RecipeManager = AFGRecipeManager::Get(GetWorld());
-
-	for (const auto& [OriginalBuildableClass, Transform/*, CustomizationData*/, BuildableExtraData] : CurrentBuildingData)
+	for (const auto& [ClassHash, Transform/*, CustomizationData*/, BuildableExtraData, DataType, DataCache] : CurrentBuildingData)
 	{
-		if (!OriginalBuildableClass)
+		CARTO_LOG_VERY_VERBOSE("Buildable: %u, Transform: %s", ClassHash, *Transform.ToString());
+
+		switch (DataType)
 		{
-			continue;
-		}
+		case EBuildingDataType::Invalid:
+			break;
 
-		CARTO_LOG_VERY_VERBOSE("Buildable: %s, Transform: %s", *OriginalBuildableClass->GetName(), *Transform.ToString());
-
-		const TSoftClassPtr<AFGBuildable>* RedirectClass = BuildableClassRedirectMap.Find(OriginalBuildableClass.Get());
-        const TSubclassOf<AFGBuildable> BuildableClass = RedirectClass ? RedirectClass->LoadSynchronous() : OriginalBuildableClass.Get();
-
-		if (BuildableClass->ImplementsInterface(UFGSplineBuildableInterface::StaticClass()))
+		case EBuildingDataType::Icon:
 		{
-            const FSplineData* SplineData = BuildableSplineDataMap.Find(BuildableClass.Get());
-			if (!SplineData)
-			{
-                UE_LOG(LogCartograph, Warning, TEXT("Can't find spline data for %s"), *BuildableClass->GetName());
-				continue;
-			}
+			const auto& [ScreenPosition, Size, Rotation, IconOrRectangleData] = std::get<FNormalDataCache>(DataCache);
+            const TSoftObjectPtr<UTexture2D>& Texture = std::get<TSoftObjectPtr<UTexture2D>>(IconOrRectangleData);
 
-			if (SplineData->Thickness < 0)
-			{
-				continue;
-			}
-
-			const FSplineExtraData* SplineExtraData = std::get_if<FSplineExtraData>(&BuildableExtraData);
-			if (!SplineExtraData)
-			{
-				UE_LOG(LogCartograph, Error, TEXT("Can't find spline extra data for %s"), *BuildableClass->GetName());
-				continue;
-			}
-
-			const int SplinePointCount = SplineExtraData->SplinePoints.Num();
-			if (SplinePointCount < 2)
-			{
-				continue;
-			}
-
-			const int Segments = SplineData->SegmentsCached;
-			const float Step = 1.f / Segments;
-
-            const std::pair<TArray<FVector2D>, TArray<FVector2D>>* Tangents = SplineExtraData->Tangents.GetPtrOrNull();
-
-			for (int i = 1; i < SplinePointCount; i++)
-			{
-				const FVector2D& PrevPoint = SplineExtraData->SplinePoints[i - 1];
-				const FVector2D& NextPoint = SplineExtraData->SplinePoints[i];
-
-				for (int j = 0; j < Segments; j++)
-				{
-					if (SplineData->UseTangents)
-					{
-						const FVector2D& LeaveTangent = Tangents->first[i - 1];
-                        const FVector2D& ArriveTangent = Tangents->second[i];
-						
-						const FVector2D Start{ Transform.TransformPosition(FVector{ 
-							FMath::CubicInterp(PrevPoint, LeaveTangent, NextPoint, ArriveTangent, j * Step), 0 }) };
-						const FVector2D End{ Transform.TransformPosition(FVector{ 
-							FMath::CubicInterp(PrevPoint, LeaveTangent, NextPoint, ArriveTangent, (j + 1) * Step), 0 }) };
-
-						draw_line(Canvas, Start, End, SplineData->Color, SplineData->Thickness);
-					}
-					else
-					{
-						const FVector2D Start{ Transform.TransformPosition(FVector{ 
-							FMath::Lerp(PrevPoint, NextPoint, j * Step), 0 }) };
-						const FVector2D End{ Transform.TransformPosition(FVector{ 
-							FMath::Lerp(PrevPoint, NextPoint, (j + 1) * Step), 0 }) };
-
-						draw_line(Canvas, Start, End, SplineData->Color, SplineData->Thickness);
-					}
-
-					co_await Budget;
-				}
-			}
-
-			continue;
-		}
-
-		if (BuildableClass->IsChildOf(AFGBuildableWire::StaticClass()))
-        {
-            const FWireData* WireData = BuildableWireDataMap.Find(BuildableClass.Get());
-            if (!WireData)
-            {
-                UE_LOG(LogCartograph, Warning, TEXT("Can't find wire data for %s"), *BuildableClass->GetName());
-                continue;
-            }
-
-			if (WireData->Thickness < 0)
-			{
-				continue;
-			}
-
-			const FWireExtraData* WireExtraData = std::get_if<FWireExtraData>(&BuildableExtraData);
-			if (!WireExtraData)
-			{
-                UE_LOG(LogCartograph, Error, TEXT("Can't find wire extra data for %s"), *BuildableClass->GetName());
-				continue;
-			}
-
-            draw_line(Canvas, Transform.GetLocation(), WireExtraData->End, WireData->Color, WireData->Thickness);
-
-            co_await Budget;
-			continue;
-        }
-
-		if (BuildableClass->IsChildOf(AFGBuildableBeam::StaticClass()))
-		{
-			const FWireData* BeamData = BuildableWireDataMap.Find(BuildableClass.Get());
-			if (!BeamData)
-			{
-                UE_LOG(LogCartograph, Warning, TEXT("Can't find beam data for %s"), *BuildableClass->GetName());
-				continue;
-			}
-
-			const FBeamExtraData* BeamExtraData = std::get_if<FBeamExtraData>(&BuildableExtraData);
-			if (!BeamExtraData)
-			{
-				UE_LOG(LogCartograph, Error, TEXT("Can't find beam extra data for %s"), *BuildableClass->GetName());
-				continue;
-			}
-
-            const float Length = BeamExtraData->Length;
-			const FVector Start = Transform.GetLocation();
-            const FVector End = Start + Transform.GetRotation().Vector() * Length;
-			draw_line(Canvas, Start, End, BeamData->Color, BeamData->Thickness);
-
-            co_await Budget;
-			continue;
-		}
-
-
-		FVector2D* Size = BuildableSizeOverrideMap.Find(BuildableClass.Get());
-		if (!Size)
-		{
-			const FBox ClearanceBox = Cast<AFGBuildable>(BuildableClass->ClassDefaultObject)->GetCombinedClearanceBox();
-			if (!ClearanceBox.IsValid)
-			{
-                UE_LOG(LogCartograph, Warning, TEXT("Can't find size for %s"), *BuildableClass->GetName());
-				continue;
-			}
-
-			FVector2D ClearanceBoxSize{ ClearanceBox.GetSize() };
-			Size = &ClearanceBoxSize;
-		}
-        if (Size->X == 0.f || Size->Y == 0.f)
-        {
-            continue;
-        }
-		*Size *= FVector2D{ Transform.GetScale3D() };
-		const FVector2D ScreenPosition = world_position_to_screen_position(Transform.GetLocation(), *Size);
-		const FRotator* ExtraRotation = BuildableExtraRotationMap.Find(BuildableClass.Get());
-
-		if (const TSoftObjectPtr<UTexture2D>* Texture = BuildableIconOverrideMap.Find(BuildableClass.Get());
-			Texture && !Texture->IsNull())
-		{
-			const UTexture2D* LoadedTexture = Texture->Get();
+			// The texture might have gotten unloaded between redraws, so we can't cache it.
+			const UTexture2D* LoadedTexture = Texture.Get();
 			if (!LoadedTexture)
 			{
-				LoadedTexture = co_await UE5Coro::Latent::AsyncLoadObject(*Texture);
+				LoadedTexture = co_await UE5Coro::Latent::AsyncLoadObject(Texture);
 			}
 
 			FCanvasTileItem TileItem{
 				ScreenPosition,
 				LoadedTexture->GetResource(),
-				{ Size->X * PIXEL_PER_CENTIMETER[0], Size->Y * PIXEL_PER_CENTIMETER[1] },
+				{ Size.X * PIXEL_PER_CENTIMETER[0], Size.Y * PIXEL_PER_CENTIMETER[1] },
 				{ 0, 0 },
 				{ 1, 1 },
 				FLinearColor::White
 			};
 			TileItem.PivotPoint = { 0.5, 0.5 };
 			TileItem.BlendMode = FCanvas::BlendToSimpleElementBlend(EBlendMode::BLEND_Translucent);
-			TileItem.Rotation = Transform.GetRotation().Rotator();
-			if (ExtraRotation)
-			{
-				TileItem.Rotation += *ExtraRotation;
-			}
+			TileItem.Rotation = Rotation;
 
 			Canvas->DrawItem(TileItem);
+
+			break;
 		}
-		else
+
+		case EBuildingDataType::Rectangle:
 		{
-            const FCategoryData* CategoryData = BuildableBuildCategoryDataOverrideMap.Find(BuildableClass.Get());
-			if (!CategoryData)
-			{
-				const TSubclassOf<UFGBuildingDescriptor> Descriptor = RecipeManager->FindBuildingDescriptorByClass(BuildableClass);
-				if (TArray<TSubclassOf<UFGCategory>> Subcategories = UFGItemDescriptor::GetSubCategoriesOfClass(Descriptor, UFGBuildSubCategory::StaticClass());
-					!Subcategories.IsEmpty())
-				{
-					CategoryData = BuildCategoryDataMap.Find(Subcategories[0].Get());
-				}
-				if (!CategoryData)
-				{
-					const TSubclassOf<UFGBuildCategory> Category = UFGBuildingDescriptor::GetBuildCategory(Descriptor);
-					CategoryData = BuildCategoryDataMap.Find(Category.Get());
-				}
-			}
-			if (!CategoryData)
-			{
-				UE_LOG(LogCartograph, Warning, TEXT("Can't find category data for %s"), *BuildableClass->GetName());
-				continue;
-			}
+			const auto& [ScreenPosition, Size, Rotation, IconOrRectangleData] = std::get<FNormalDataCache>(DataCache);
+			const auto& [CategoryData, LocalCorners] = std::get<FRectangleDataCache>(IconOrRectangleData);
 
 			FCanvasTileItem TileItem{
 				ScreenPosition,
-				{ Size->X * PIXEL_PER_CENTIMETER[0], Size->Y * PIXEL_PER_CENTIMETER[1] },
+				{ Size.X * PIXEL_PER_CENTIMETER[0], Size.Y * PIXEL_PER_CENTIMETER[1] },
 				CategoryData->MainColor
 			};
 			TileItem.PivotPoint = { 0.5, 0.5 };
 			TileItem.BlendMode = FCanvas::BlendToSimpleElementBlend(EBlendMode::BLEND_Translucent);
-			TileItem.Rotation = Transform.GetRotation().Rotator();
-			if (ExtraRotation)
-			{
-				TileItem.Rotation += *ExtraRotation;
-			}
+			TileItem.Rotation = Rotation;
 
 			Canvas->DrawItem(TileItem);
 			co_await Budget;
 
-			const float HalfWidth = Size->X / 2;
-			const float HalfHeight = Size->Y / 2;
-			FVector LocalCorners[] = {
-				{ -HalfWidth, -HalfHeight, 0 },
-				{ HalfWidth, -HalfHeight, 0 },
-				{ HalfWidth,  HalfHeight, 0 },
-				{ -HalfWidth,  HalfHeight, 0 },
-			};
-
-			FTransform TransformNoScale = Transform;
-            TransformNoScale.SetScale3D(FVector::OneVector);
-			for (FVector& Corner : LocalCorners)
-			{
-				Corner = TransformNoScale.TransformPosition(Corner);
-			}
-
 			if (CategoryData->OutlineThickness > 0)
 			{
 				draw_line(Canvas, LocalCorners[0], LocalCorners[1], CategoryData->OutlineColor, CategoryData->OutlineThickness);
+				co_await Budget;
 				draw_line(Canvas, LocalCorners[1], LocalCorners[2], CategoryData->OutlineColor, CategoryData->OutlineThickness);
+				co_await Budget;
 				draw_line(Canvas, LocalCorners[2], LocalCorners[3], CategoryData->OutlineColor, CategoryData->OutlineThickness);
+				co_await Budget;
 				draw_line(Canvas, LocalCorners[3], LocalCorners[0], CategoryData->OutlineColor, CategoryData->OutlineThickness);
 			}
+
+			break;
+		}
+
+		case EBuildingDataType::Spline:
+		{
+			const auto& [SplineData, StartPoints, EndPoints] = std::get<FSplineDataCache>(DataCache);
+            const int Num = StartPoints.Num();
+            for (int i = 0; i < Num; i++)
+            {
+                draw_line(Canvas, StartPoints[i], EndPoints[i], SplineData->Color, SplineData->Thickness);
+                co_await Budget;
+            }
+
+			break;
+		}
+
+		case EBuildingDataType::Wire:
+		{
+			const FWireExtraData* WireExtraData = std::get_if<FWireExtraData>(&BuildableExtraData);
+			if (!WireExtraData)
+			{
+				UE_LOG(LogCartograph, Error, TEXT("Can't find wire extra data"));
+				continue;
+			}
+
+			const FWireData* WireData = std::get<const FWireData*>(DataCache);
+
+			draw_line(Canvas, Transform.GetLocation(), WireExtraData->End, WireData->Color, WireData->Thickness);
+
+			break;
+		}
+
+        case EBuildingDataType::Beam:
+		{
+			const FBeamExtraData* BeamExtraData = std::get_if<FBeamExtraData>(&BuildableExtraData);
+			if (!BeamExtraData)
+			{
+				UE_LOG(LogCartograph, Error, TEXT("Can't find beam extra data"));
+				continue;
+			}
+
+			const FWireData* BeamData = std::get<const FWireData*>(DataCache);
+
+			const float Length = BeamExtraData->Length;
+			const FVector Start = Transform.GetLocation();
+			const FVector End = Start + Transform.GetRotation().Vector() * Length;
+			draw_line(Canvas, Start, End, BeamData->Color, BeamData->Thickness);
+
+            break;
+		}
+
+		default:
+			break;
 		}
 
 		co_await Budget;
@@ -1046,6 +1173,27 @@ void UCartographGameInstanceModule::AddExtraData(FBuildingData& BuildingData, AF
 
 		return;
 	}
+}
+
+
+void UCartographGameInstanceModule::AfterSplineSegmentsModified()
+{
+	FCartograph_ConfigStruct ConfigInstance = FCartograph_ConfigStruct::GetActiveConfig(GetWorld());
+	for (auto& [_, SplineData] : BuildableSplineDataMap)
+	{
+		const FProperty* Property = FCartograph_ConfigStruct::StaticStruct()->FindPropertyByName(SplineData.SegmentsConfigName);
+		if (!Property)
+		{
+			UE_LOG(LogCartograph, Error, TEXT("SparsityConfigName not found: %s"), *SplineData.SegmentsConfigName.ToString());
+			continue;
+		}
+		SplineData.SegmentsCached = *Property->ContainerPtrToValuePtr<int>(&ConfigInstance);
+	}
+
+    for (FBuildingData& BuildingData : CurrentBuildingData)
+    {
+        BuildingData.CalculateSplinePoints();
+    }
 }
 
 
