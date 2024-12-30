@@ -187,21 +187,21 @@ bool FBuildingData::NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSucce
 	// We'll serialize the class name since deserializing UObject* from pure memory is such a pain.
 	// Hashing it to reduce the size.
 
+	uint32 ClassIDHash = 0;
 	if (!Ar.IsLoading())  // Serialize
 	{
-		if (uint32* ClassIDHash = UCartographGameInstanceModule::Instance->ClassPtrToClassIDMap.Find(BuildableClass))
-		{
-			Ar.SerializeBits(ClassIDHash, 32);
+		if (const uint32* ClassID = UCartographGameInstanceModule::Instance->ClassPtrToClassIDMap.Find(BuildableClass))
+        {
+            ClassIDHash = *ClassID;
 		}
 		else
 		{
-            UE_LOG(LogCartograph, Error, TEXT("Class %s not found in ClassPtrToClassIDMap"), *BuildableClass->GetName());
-            bOutSuccess = false;
+            UE_LOG(LogCartograph, Warning, TEXT("Class %s not found in ClassPtrToClassIDMap"), *BuildableClass->GetName());
 		}
+		Ar.SerializeBits(&ClassIDHash, 32);
 	}
     else  // Deserialize
 	{
-		uint32 ClassIDHash;
 		Ar.SerializeBits(&ClassIDHash, 32);
         if (const TSubclassOf<AFGBuildable>* Class = UCartographGameInstanceModule::Instance->ClassIDToClassPtrMap.Find(ClassIDHash))
         {
@@ -209,8 +209,7 @@ bool FBuildingData::NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSucce
         }
         else
         {
-            UE_LOG(LogCartograph, Error, TEXT("Class ID %u not found in ClassIDToClassPtrMap"), ClassIDHash);
-            bOutSuccess = false;
+            UE_LOG(LogCartograph, Warning, TEXT("Class ID %u not found in ClassIDToClassPtrMap"), ClassIDHash);
         }
 	}
 
