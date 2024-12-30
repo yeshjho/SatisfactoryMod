@@ -74,9 +74,9 @@ void UCartographRemoteCallObject::ServerRequestInitialBuildingData_Implementatio
 
     const int i = ++LastSentSlice;
     FBuildingDataBuffer SendBuffer;
-    const int Size = FMath::Min(BuildingDataBufferMaxSize, InitialBuildingData.TotalSize() - i * BuildingDataBufferMaxSize);
+    const int16 Size = FMath::Min(BuildingDataBufferMaxSize, InitialBuildingData.TotalSize() - i * BuildingDataBufferMaxSize);
     FMemory::Memcpy(SendBuffer.Data, static_cast<uint8*>(InitialBuildingData.GetWriterData()) + i * BuildingDataBufferMaxSize, Size);
-    ClientReceiveInitialBuildingData(SendBuffer, Size, i == Slices - 1);
+    ClientReceiveInitialBuildingData(SendBuffer, Size, Slices);
 
     CARTO_LOG_DEBUG("Sending Initial Data (%d/%d)", i + 1, Slices);
 
@@ -91,18 +91,23 @@ void UCartographRemoteCallObject::ServerRequestInitialBuildingData_Implementatio
 }
 
 
-void UCartographRemoteCallObject::ClientReceiveInitialBuildingData_Implementation(const FBuildingDataBuffer& Array, int Size, bool IsLast)
+void UCartographRemoteCallObject::ClientReceiveInitialBuildingData_Implementation(const FBuildingDataBuffer& Array, int16 Size, int16 TotalSliceCount)
 {
+    if (!GameInstanceModule)
+    {
+        UGameInstanceModule* Module = GetWorld()->GetGameInstance()->GetSubsystem<UGameInstanceModuleManager>()->FindModule("Cartograph");
+        GameInstanceModule = Cast<UCartographGameInstanceModule>(Module);
+    }
+
     CARTO_LOG_DEBUG("Received Initial Data");
     Buffer.Append(Array.Data, Size);
 
+    ReceivedSliceCount++;
+    GameInstanceModule->InitializeProgress = static_cast<float>(ReceivedSliceCount) / TotalSliceCount;
+
+    const bool IsLast = ReceivedSliceCount == TotalSliceCount;
     if (IsLast)
     {
-        if (!GameInstanceModule)
-        {
-            UGameInstanceModule* Module = GetWorld()->GetGameInstance()->GetSubsystem<UGameInstanceModuleManager>()->FindModule("Cartograph");
-            GameInstanceModule = Cast<UCartographGameInstanceModule>(Module);
-        }
         CARTO_LOG_DEBUG("Was Last. Received %d.", Buffer.Num());
         InitialBuildableDeserialize();
     }
@@ -139,7 +144,6 @@ UE5Coro::TCoroutine<> UCartographRemoteCallObject::InitialBuildableDeserialize(F
     }
     /// End
     
-    Buffer.Empty();
     GameInstanceModule->IsInitializing = false;
     GameInstanceModule->RedrawMap();
 }

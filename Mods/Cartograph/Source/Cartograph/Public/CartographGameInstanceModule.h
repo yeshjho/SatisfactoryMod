@@ -20,7 +20,7 @@ class UFGBuildCategory;
 DECLARE_LOG_CATEGORY_EXTERN(LogCartograph, Display, All);
 
 
-constexpr bool ENABLE_DEBUG_LOG = true;
+constexpr bool ENABLE_DEBUG_LOG = false;
 constexpr bool ENABLE_VERBOSE_LOG = false;
 constexpr bool ENABLE_VERY_VERBOSE_LOG = false;
 #define CARTO_LOG_DEBUG(format, ...) if constexpr (ENABLE_DEBUG_LOG) UE_LOG(LogCartograph, Display, TEXT(format) __VA_OPT__(, __VA_ARGS__))
@@ -209,6 +209,8 @@ protected:
 	bool ShouldInitialize = false;
 	UPROPERTY(BlueprintReadOnly)
 	bool IsInitializing = false;
+	UPROPERTY(BlueprintReadOnly)
+	float InitializeProgress = 0;
 
 	UE5Coro::TCoroutine<> Coroutine = UE5Coro::TCoroutine<>::CompletedCoroutine;
 	FDrawToRenderTargetContext RenderContext;

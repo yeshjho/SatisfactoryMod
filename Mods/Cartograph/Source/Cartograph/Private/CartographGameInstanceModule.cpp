@@ -491,6 +491,8 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 			{
 				ShouldInitialize = false;
 				IsInitializing = true;
+				RCO->ReceivedSliceCount = 0;
+				RCO->Buffer.Empty();
 				RCO->ServerRequestInitialBuildingData(PlayerController, EInitialDataSendPhase::Initial);
 			}
 			else
@@ -538,12 +540,21 @@ void UCartographGameInstanceModule::OnWorldLoaded()
 UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
 	TArray<TWeakObjectPtr<AFGBuildable>> Factories, TMap<TSubclassOf<AFGBuildable>, TArray<FRuntimeBuildableInstanceData>> Buildings, FForceLatentCoroutine)
 {
-    CARTO_LOG_DEBUG("InitialBuildableGather Started. Factories: %d, Buildings: %d", Factories.Num(), Buildings.Num());
+	int BuildingCount = 0;
+	for (const auto& [Type, Arr] : Buildings)
+	{
+        BuildingCount += Arr.Num();
+	}
 
-	CurrentBuildingData.Empty(Factories.Num() + Buildings.Num());
+    CARTO_LOG_DEBUG("InitialBuildableGather Started. Factories: %d, Buildings: %d", Factories.Num(), BuildingCount);
+
+	const int Total = Factories.Num() + BuildingCount;
+	CurrentBuildingData.Empty(Total);
 
 	const float TimeBudget = FCartograph_ConfigStruct::GetActiveConfig(GetWorld()).InitializeTimeBudget;
 	UE5Coro::Latent::FTickTimeBudget Budget = UE5Coro::Latent::FTickTimeBudget::Milliseconds(TimeBudget);
+
+	int Processed = 0;
 
 	for (const TWeakObjectPtr<AFGBuildable>& Factory : Factories)
 	{
@@ -562,6 +573,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
 		const int32 Pos = Algo::LowerBound(CurrentBuildingData, NewBuildingData);
 		CurrentBuildingData.Insert(std::move(NewBuildingData), Pos);
 
+        InitializeProgress = static_cast<float>(++Processed) / Total;
 		co_await Budget;
 	}
 
@@ -578,6 +590,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
 			const int32 Pos = Algo::LowerBound(CurrentBuildingData, NewBuildingData);
 			CurrentBuildingData.Insert(std::move(NewBuildingData), Pos);
 
+			InitializeProgress = static_cast<float>(++Processed) / Total;
 			co_await Budget;
 		}
 	}

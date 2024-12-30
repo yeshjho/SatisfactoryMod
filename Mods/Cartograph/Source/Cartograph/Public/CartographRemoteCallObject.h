@@ -73,8 +73,8 @@ private:
 	void ServerRequestInitialBuildingData_Implementation(APlayerController* PlayerController, EInitialDataSendPhase SendPhase);
 
 	UFUNCTION(Client, Reliable)
-	void ClientReceiveInitialBuildingData(const FBuildingDataBuffer& Array, int Size, bool IsLast);
-	void ClientReceiveInitialBuildingData_Implementation(const FBuildingDataBuffer& Array, int Size, bool IsLast);
+	void ClientReceiveInitialBuildingData(const FBuildingDataBuffer& Array, int16 Size, int16 TotalSliceCount);
+	void ClientReceiveInitialBuildingData_Implementation(const FBuildingDataBuffer& Array, int16 Size, int16 TotalSliceCount);
 
 
 	UE5Coro::TCoroutine<> InitialBuildableDeserialize(FForceLatentCoroutine = {});
@@ -84,8 +84,11 @@ protected:
 	UPROPERTY(Replicated)
 	bool bDummy = true;
 
+	// Server side
 	TMap<APlayerController*, FInitialBuildingDataToSend> InitialBuildingDataToSendPerPlayer;
 
+	// Client side
+	int16 ReceivedSliceCount = 0;
     TArray<uint8> Buffer;
 
     UCartographGameInstanceModule* GameInstanceModule = nullptr;
