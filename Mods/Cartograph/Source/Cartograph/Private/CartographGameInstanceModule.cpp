@@ -3,10 +3,11 @@
 #include "AssetRegistryModule.h"
 #include "CanvasItem.h"
 #include "CanvasPanelSlot.h"
-#include "HorizontalBox.h"
-#include "HorizontalBoxSlot.h"
 #include "Engine/Canvas.h"
 #include "Engine/CanvasRenderTarget2D.h"
+#include "HorizontalBox.h"
+#include "HorizontalBoxSlot.h"
+#include "OutputDeviceNull.h"
 #include "WidgetBlueprintGeneratedClass.h"
 
 #include "FGLightweightBuildableSubsystem.h"
@@ -22,6 +23,8 @@
 #include "FGSaveSession.h"
 #include "FGSplineBuildableInterface.h"
 
+#include "Patching/BlueprintHookHelper.h"
+#include "Patching/BlueprintHookManager.h"
 #include "Patching/NativeHookManager.h"
 
 #include "CartographModSubsystem.h"
@@ -914,6 +917,50 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 		SUBSCRIBE_UOBJECT_METHOD_AFTER(AFGLightweightBuildableSubsystem, InvalidateRuntimeInstanceDataForIndex, LambdaAfterInvalidateRuntimeInstanceDataForIndex);
 
 		SUBSCRIBE_UOBJECT_METHOD_AFTER(AFGBuildableSubsystem, RemoveBuildable, LambdaAfterRemoveBuildable);
+
+		if (!FPlatformProperties::IsServerOnly())
+		{
+			UBlueprintHookManager* HookManager = GEngine->GetEngineSubsystem<UBlueprintHookManager>();
+			HookManager->HookBlueprintFunction(
+				MapContainerWidget->FindFunctionByName(TEXT("SetFiltersCollapsed")),
+				[](const FBlueprintHookHelper& Helper) 
+				{
+					TSharedRef<FBlueprintHookVariableHelper_Local> VariableHelper = Helper.GetLocalVariableHelper();
+					const bool IsCollapsed = VariableHelper->GetBoolVariable(TEXT("IsCollapsed"));
+					if (IsCollapsed)
+					{
+						return;
+					}
+
+					const auto* Widget = Cast<UUserWidget>(Helper.GetContext());
+					UWidget* Menu = Widget->WidgetTree->FindWidget("CartographMenu");
+					if (!Menu)
+					{
+                        UE_LOG(LogCartograph, Error, TEXT("Failed to find CartographMenu"));
+                        return;
+                    }
+					Menu->SetVisibility(ESlateVisibility::Collapsed);
+
+					UWidget* Button = Widget->WidgetTree->FindWidget("CartographMenuShowHideButton");
+                    if (!Button)
+                    {
+                        UE_LOG(LogCartograph, Error, TEXT("Failed to find CartographMenuShowHideButton"));
+                        return;
+                    }
+
+					FProperty* IsOpenProperty = Button->GetClass()->FindPropertyByName("IsOpen");
+                    if (!IsOpenProperty)
+                    {
+                        UE_LOG(LogCartograph, Error, TEXT("Failed to find IsOpen property"));
+                        return;
+                    }
+					*IsOpenProperty->ContainerPtrToValuePtr<bool>(Button) = false;
+
+					FOutputDeviceNull Ar;
+					Button->CallFunctionByNameWithArguments(TEXT("SetShowHideText"), Ar, nullptr, true);
+				},
+				EPredefinedHookOffset::Return);
+		}
 	}
 #pragma endregion
 }
@@ -1388,10 +1435,21 @@ void UCartographGameInstanceModule::OnCartographMenuButtonClicked(UUserWidget* W
 	{
 		if (ChildWidget->GetName() == "CartographMenu")
 		{
-			CARTO_LOG_DEBUG("CartographMenuButtonClicked: %d", IsOpen);
 			ChildWidget->SetVisibility(IsOpen ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 			break;
 		}
+	}
+
+	if (IsOpen)
+	{
+		auto* RootWidget = Cast<UWidget>(Widget->GetParent()->GetOuter()->GetOuter());
+        if (!RootWidget)
+        {
+            UE_LOG(LogCartograph, Error, TEXT("RootWidget not found"));
+            return;
+        }
+		FOutputDeviceNull Ar;
+		RootWidget->CallFunctionByNameWithArguments(TEXT("SetFiltersCollapsed 1"), Ar, nullptr, true);
 	}
 }
 #pragma endregion
