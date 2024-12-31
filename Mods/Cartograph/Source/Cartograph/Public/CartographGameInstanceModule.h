@@ -186,7 +186,7 @@ struct FWireData
 /**
  * 
  */
-UCLASS()
+UCLASS(PrioritizeCategories=("Data", "UI", "Advanced", "Default", "Generated Data"))
 class CARTOGRAPH_API UCartographGameInstanceModule : public UGameInstanceModule
 {
 	GENERATED_BODY()
@@ -211,6 +211,8 @@ private:
 
 	void AddExtraData(FBuildingData& BuildingData, AFGBuildable* Buildable);
 
+	void RegisterMenuButton();
+
 #if WITH_EDITOR
 	virtual void PostCDOContruct() override;
 #endif
@@ -227,42 +229,49 @@ private:
 public:
 	inline static UCartographGameInstanceModule* Instance = nullptr;
 
-	UPROPERTY(EditDefaultsOnly)
+	// Made it editable since it doesn't get cleared properly sometimes.
+	UPROPERTY(EditDefaultsOnly, Category = "Generated Data")
     TMap<uint32, TSubclassOf<AFGBuildable>> ClassIDToClassPtrMap;
-	UPROPERTY(EditDefaultsOnly)
+	UPROPERTY(EditDefaultsOnly, Category = "Generated Data")
     TMap<TSubclassOf<AFGBuildable>, uint32> ClassPtrToClassIDMap;
 
 
-	UPROPERTY(EditDefaultsOnly)
+	UPROPERTY(EditDefaultsOnly, Category = "Data")
 	TMap<TSoftClassPtr<UFGBuildCategory>, FCategoryData> BuildCategoryDataMap;
 
-	UPROPERTY(EditDefaultsOnly)
+	UPROPERTY(EditDefaultsOnly, Category = "Data")
 	TMap<TSoftClassPtr<AFGBuildable>, FCategoryData> BuildableBuildCategoryDataOverrideMap;
 
-	UPROPERTY(EditDefaultsOnly)
+	UPROPERTY(EditDefaultsOnly, Category = "Data")
 	TMap<TSubclassOf<UFGFactoryCustomizationDescriptor_Material>, FCategoryData> MaterialBuildCategoryDataOverrideMap;
 
-	UPROPERTY(EditDefaultsOnly)
+	UPROPERTY(EditDefaultsOnly, Category = "Data")
 	TMap<TSoftClassPtr<AFGBuildable>, TSoftObjectPtr<UTexture2D>> BuildableIconOverrideMap;
 
-	UPROPERTY(EditDefaultsOnly)
+	UPROPERTY(EditDefaultsOnly, Category = "Data")
 	TMap<TSoftClassPtr<AFGBuildable>, FVector2D> BuildableSizeOverrideMap;
 
-	UPROPERTY(EditDefaultsOnly)
+	UPROPERTY(EditDefaultsOnly, Category = "Data")
 	TMap<TSoftClassPtr<AFGBuildable>, FRotator> BuildableExtraRotationMap;
 
-	UPROPERTY(EditDefaultsOnly)
+	UPROPERTY(EditDefaultsOnly, Category = "Data")
 	TMap<TSoftClassPtr<AFGBuildable>, FSplineData> BuildableSplineDataMap;
 
-	UPROPERTY(EditDefaultsOnly)
+	UPROPERTY(EditDefaultsOnly, Category = "Data")
     TMap<TSoftClassPtr<AFGBuildable>, FWireData> BuildableWireDataMap;
 
-	UPROPERTY(EditDefaultsOnly)
+	UPROPERTY(EditDefaultsOnly, Category = "Data")
 	TMap<TSoftClassPtr<AFGBuildable>, TSoftClassPtr<AFGBuildable>> BuildableClassRedirectMap;
 
 protected:
-	UPROPERTY(EditDefaultsOnly)
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TObjectPtr<UCanvasRenderTarget2D> RenderTarget;
+
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSoftClassPtr<UUserWidget> MapContainerWidget;
+
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UUserWidget> MenuWidget;
 
 
 	bool ShouldInitialize = false;

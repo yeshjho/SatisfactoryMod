@@ -2,8 +2,12 @@
 
 #include "AssetRegistryModule.h"
 #include "CanvasItem.h"
+#include "CanvasPanelSlot.h"
+#include "HorizontalBox.h"
+#include "HorizontalBoxSlot.h"
 #include "Engine/Canvas.h"
 #include "Engine/CanvasRenderTarget2D.h"
+#include "WidgetBlueprintGeneratedClass.h"
 
 #include "FGLightweightBuildableSubsystem.h"
 #include "FGBuildable.h"
@@ -24,6 +28,8 @@
 #include "CartographRemoteCallObject.h"
 #include "Cartograph_ConfigStruct.h"
 #include "QuantizedVector2DSerialization.h"
+
+#define LOCTEXT_NAMESPACE "Cartograph"
 
 
 constexpr int RENDER_TEXTURE_SIZE = 1024 * 8;
@@ -568,10 +574,18 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 {
 	Super::DispatchLifecycleEvent(Phase);
 
-    if (Phase != ELifecyclePhase::POST_INITIALIZATION)
-    {
-        return;
-    }
+	switch (Phase)
+	{
+	case ELifecyclePhase::CONSTRUCTION:
+		return;
+
+	case ELifecyclePhase::INITIALIZATION:
+		RegisterMenuButton();
+		return;
+
+	case ELifecyclePhase::POST_INITIALIZATION:
+		break;
+	}
 
 
 	Instance = this;
@@ -779,23 +793,26 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
         };
 
 
-	// Called only when single player or host
-	SUBSCRIBE_UOBJECT_METHOD_AFTER(UFGSaveSession, LoadGame, LambdaAfterLoadGame);
+	if (!WITH_EDITOR)
+	{
+		// Called only when single player or host
+		SUBSCRIBE_UOBJECT_METHOD_AFTER(UFGSaveSession, LoadGame, LambdaAfterLoadGame);
 
-	// Doing it after PlayerController::BeginPlay would interfere other network packets,
-    // resulting higher chance of packet loss (due to timeout)
-	SUBSCRIBE_UOBJECT_METHOD_AFTER(AFGHUD, CloseRespawnUI, LambdaAfterCloseRespawnUI);
-
-
-	SUBSCRIBE_UOBJECT_METHOD_AFTER(AFGLightweightBuildableSubsystem, AddFromBuildableInstanceData, LambdaAfterAddFromBuildableInstanceData);
-    SUBSCRIBE_UOBJECT_METHOD_AFTER(AFGLightweightBuildableSubsystem, AddFromReplicatedData, LambdaAfterAddFromReplicatedData);
-
-	SUBSCRIBE_UOBJECT_METHOD_AFTER(AFGBuildableSubsystem, AddBuildable, LambdaAfterAddBuildable);
+		// Doing it after PlayerController::BeginPlay would interfere other network packets,
+	    // resulting higher chance of packet loss (due to timeout)
+		SUBSCRIBE_UOBJECT_METHOD_AFTER(AFGHUD, CloseRespawnUI, LambdaAfterCloseRespawnUI);
 
 
-	SUBSCRIBE_UOBJECT_METHOD_AFTER(AFGLightweightBuildableSubsystem, InvalidateRuntimeInstanceDataForIndex, LambdaAfterInvalidateRuntimeInstanceDataForIndex);
+		SUBSCRIBE_UOBJECT_METHOD_AFTER(AFGLightweightBuildableSubsystem, AddFromBuildableInstanceData, LambdaAfterAddFromBuildableInstanceData);
+	    SUBSCRIBE_UOBJECT_METHOD_AFTER(AFGLightweightBuildableSubsystem, AddFromReplicatedData, LambdaAfterAddFromReplicatedData);
 
-	SUBSCRIBE_UOBJECT_METHOD_AFTER(AFGBuildableSubsystem, RemoveBuildable, LambdaAfterRemoveBuildable);
+		SUBSCRIBE_UOBJECT_METHOD_AFTER(AFGBuildableSubsystem, AddBuildable, LambdaAfterAddBuildable);
+
+
+		SUBSCRIBE_UOBJECT_METHOD_AFTER(AFGLightweightBuildableSubsystem, InvalidateRuntimeInstanceDataForIndex, LambdaAfterInvalidateRuntimeInstanceDataForIndex);
+
+		SUBSCRIBE_UOBJECT_METHOD_AFTER(AFGBuildableSubsystem, RemoveBuildable, LambdaAfterRemoveBuildable);
+	}
 }
 
 
@@ -1219,6 +1236,75 @@ void UCartographGameInstanceModule::AddExtraData(FBuildingData& BuildingData, AF
 }
 
 
+void UCartographGameInstanceModule::RegisterMenuButton()
+{
+	// Copied from WidgetBlueprintHookManager.cpp
+	class UCartographPanelWidgetAccessor : UPanelWidget
+	{
+	public:
+		static UClass* GetPanelSlotClass(const UPanelWidget* PanelWidget) {
+			return static_cast<const UCartographPanelWidgetAccessor*>(PanelWidget)->GetSlotClass();
+		}
+
+		static TArray<UPanelSlot*>& GetPanelSlots(UPanelWidget* PanelWidget) {
+			return static_cast<UCartographPanelWidgetAccessor*>(PanelWidget)->Slots;
+		}
+		UCartographPanelWidgetAccessor() = delete;
+	};
+
+	if (!FPlatformProperties::RequiresCookedData() || FPlatformProperties::IsServerOnly()) 
+	{
+		return;
+	}
+
+	const auto* WidgetBlueprintClass = Cast<UWidgetBlueprintGeneratedClass>(MapContainerWidget.LoadSynchronous());
+	UWidgetTree* WidgetTree = WidgetBlueprintClass->GetWidgetTreeArchetype();
+
+	UWidget* ShowHideButton = WidgetTree->FindWidget("ShowHideButton");
+	if (!ShowHideButton)
+	{
+        UE_LOG(LogCartograph, Error, TEXT("ShowHideButton not found"));
+		return;
+	}
+	int32 Index;
+	UPanelWidget* Parent = UWidgetTree::FindWidgetParent(ShowHideButton, Index);
+
+    UHorizontalBox* HBox = NewObject<UHorizontalBox>(WidgetTree, UHorizontalBox::StaticClass(), "MenuShowHideButtonHBox", RF_Transient);
+
+    auto* PanelSlot = NewObject<UCanvasPanelSlot>(Parent, UCanvasPanelSlot::StaticClass(), NAME_None, RF_Transient);
+    PanelSlot->Content = HBox;
+    PanelSlot->Parent = Parent;
+	PanelSlot->SetPosition({ 6, 6 });
+	PanelSlot->SetAutoSize(true);
+
+    HBox->Slot = PanelSlot;
+
+	//ShowHideButton->RemoveFromParent();  // AddChild already removes from parent
+	HBox->AddChild(ShowHideButton);
+
+    UWidget* CartographMenuShowHideButton = NewObject<UWidget>(HBox, ShowHideButton->GetClass(), NAME_None, RF_Transient, ShowHideButton);
+    auto* HBoxSlot = Cast<UHorizontalBoxSlot>(HBox->AddChild(CartographMenuShowHideButton));
+	HBoxSlot->SetPadding({ 10, 0, 0, 0 });
+
+	FProperty* TextProperty = CartographMenuShowHideButton->GetClass()->FindPropertyByName("mText");
+    if (!TextProperty)
+    {
+        UE_LOG(LogCartograph, Error, TEXT("mText not found"));
+		return;
+    }
+	FText* Text = TextProperty->ContainerPtrToValuePtr<FText>(CartographMenuShowHideButton);
+    if (!Text)
+    {
+        UE_LOG(LogCartograph, Error, TEXT("Text not found"));
+		return;
+    }
+    *Text = LOCTEXT("CartographMenuHide", "Hide Cartograph Menu");
+
+    TArray<UPanelSlot*>& MutablePanelSlots = UCartographPanelWidgetAccessor::GetPanelSlots(Parent);
+	MutablePanelSlots.Insert(PanelSlot, Index);
+}
+
+
 void UCartographGameInstanceModule::AfterSplineSegmentsModified()
 {
 	FCartograph_ConfigStruct ConfigInstance = FCartograph_ConfigStruct::GetActiveConfig(GetWorld());
@@ -1300,3 +1386,6 @@ void UCartographGameInstanceModule::PostCDOContruct()
     }
 }
 #endif
+
+
+#undef LOCTEXT_NAMESPACE
