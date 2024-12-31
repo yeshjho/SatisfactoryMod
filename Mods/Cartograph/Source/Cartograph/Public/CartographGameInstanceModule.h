@@ -111,6 +111,7 @@ struct FBuildingData
 
 	bool operator==(const FBuildingData& Other) const noexcept;
 	std::partial_ordering operator<=>(const FBuildingData& Other) const noexcept;
+    std::partial_ordering operator<=>(float Z) const noexcept;
 
 	void FillInCache(TSubclassOf<AFGBuildable> OriginalBuildableClass);  // Call it after filling in the extra data
     void FillInHash(TSubclassOf<AFGBuildable> BuildableClass);  // Call it after filling in the extra data
@@ -210,12 +211,17 @@ private:
 
 	void AddExtraData(FBuildingData& BuildingData, AFGBuildable* Buildable);
 
-	UFUNCTION()
-	void AfterSplineSegmentsModified();
-
 #if WITH_EDITOR
 	virtual void PostCDOContruct() override;
 #endif
+
+	// For blueprint use only
+private:
+	UFUNCTION()
+	void AfterSplineSegmentsModified();
+
+	UFUNCTION(BlueprintCallable)
+	void OnZFilterUpdated(float Min, float Max);
 
 
 public:
@@ -262,8 +268,6 @@ protected:
 	bool ShouldInitialize = false;
 	UPROPERTY(BlueprintReadOnly)
 	bool IsInitializing = false;
-	UPROPERTY(BlueprintReadOnly)
-	float InitializeProgress = 0;
 
 	UE5Coro::TCoroutine<> Coroutine = UE5Coro::TCoroutine<>::CompletedCoroutine;
 	FDrawToRenderTargetContext RenderContext;
@@ -275,4 +279,17 @@ protected:
 
 	bool IsInWorld = false;
     bool IsClient = false;
+
+	float MinZFilter = -std::numeric_limits<float>::max();
+    float MaxZFilter = std::numeric_limits<float>::max();
+
+	// For blueprint use only
+protected:
+	UPROPERTY(BlueprintReadOnly)
+	float InitializeProgress = 0;
+
+	UPROPERTY(BlueprintReadOnly)
+	float MinHeight = -100;
+	UPROPERTY(BlueprintReadOnly)
+	float MaxHeight = 100;
 };

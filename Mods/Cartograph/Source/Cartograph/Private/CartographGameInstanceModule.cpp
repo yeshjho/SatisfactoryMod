@@ -90,6 +90,12 @@ std::partial_ordering FBuildingData::operator<=>(const FBuildingData& Other) con
 }
 
 
+std::partial_ordering FBuildingData::operator<=>(float Z) const noexcept
+{
+    return Transform.GetLocation().Z <=> Z;
+}
+
+
 FArchive& operator<<(FArchive& Ar, TArray<FVector2D>& A)
 {
 	A.CountBytes(Ar);
@@ -875,6 +881,10 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
 		}
 	}
 
+	MinHeight = !CurrentBuildingData.IsEmpty() ? CurrentBuildingData[0].Transform.GetLocation().Z : -100;
+	MaxHeight = !CurrentBuildingData.IsEmpty() ? CurrentBuildingData.Last().Transform.GetLocation().Z : 100;
+	OnZFilterUpdated(0, 1);
+
 	CARTO_LOG_DEBUG("InitialBuildableGather Finished");
 
 	IsInitializing = false;
@@ -952,6 +962,9 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 	        co_await Budget;
 	    }
 
+        MinHeight = !CurrentBuildingData.IsEmpty() ? CurrentBuildingData[0].Transform.GetLocation().Z : -100;
+        MaxHeight = !CurrentBuildingData.IsEmpty() ? CurrentBuildingData.Last().Transform.GetLocation().Z : 100;
+
         CARTO_LOG_DEBUG("Buildings Change Processed");
 	}
 
@@ -970,8 +983,17 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 	FVector2D _;
 	UKismetRenderingLibrary::BeginDrawCanvasToRenderTarget(this, RenderTarget, Canvas, _, RenderContext);
 
-	for (const auto& [ClassHash, Transform/*, CustomizationData*/, BuildableExtraData, DataType, DataCache] : CurrentBuildingData)
+    const int32 Min = Algo::LowerBound(CurrentBuildingData, MinZFilter);
+    const int32 Max = Algo::UpperBound(CurrentBuildingData, MaxZFilter);
+    if (Min >= CurrentBuildingData.Num() || Max <= 0)
+    {
+        co_return;
+    }
+
+	for (int32 i = Min; i < Max; i++)
 	{
+        const auto& [ClassHash, Transform/*, CustomizationData*/, BuildableExtraData, DataType, DataCache] = CurrentBuildingData[i];
+
 		CARTO_LOG_VERY_VERBOSE("Buildable: %u, Transform: %s", ClassHash, *Transform.ToString());
 
 		switch (DataType)
@@ -1222,6 +1244,19 @@ void UCartographGameInstanceModule::AfterSplineSegmentsModified()
     }
 
 	RedrawMap();
+}
+
+
+void UCartographGameInstanceModule::OnZFilterUpdated(float Min, float Max)
+{
+	const float Length = MaxHeight - MinHeight;
+	MinZFilter = FMath::Floor(Min * Length + MinHeight);
+    MaxZFilter = FMath::CeilToInt(Max * Length + MinHeight);
+
+	if (!IsInitializing)
+	{
+        RedrawMap();
+	}
 }
 
 
