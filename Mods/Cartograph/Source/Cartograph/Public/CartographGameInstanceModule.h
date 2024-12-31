@@ -225,6 +225,9 @@ private:
 	UFUNCTION(BlueprintCallable)
 	void OnZFilterUpdated(float Min, float Max);
 
+	UFUNCTION(BlueprintCallable)
+	void OnCartographMenuButtonClicked(UUserWidget* Widget, bool IsOpen);
+
 
 public:
 	inline static UCartographGameInstanceModule* Instance = nullptr;
@@ -269,6 +272,9 @@ protected:
 
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSoftClassPtr<UUserWidget> MapContainerWidget;
+
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UUserWidget> MenuShowHideButtonWidget;
 
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UUserWidget> MenuWidget;

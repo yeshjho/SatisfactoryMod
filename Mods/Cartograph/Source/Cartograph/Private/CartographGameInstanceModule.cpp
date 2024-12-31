@@ -1271,18 +1271,18 @@ void UCartographGameInstanceModule::RegisterMenuButton()
 
     UHorizontalBox* HBox = NewObject<UHorizontalBox>(WidgetTree, UHorizontalBox::StaticClass(), "MenuShowHideButtonHBox", RF_Transient);
 
-    auto* PanelSlot = NewObject<UCanvasPanelSlot>(Parent, UCanvasPanelSlot::StaticClass(), NAME_None, RF_Transient);
-    PanelSlot->Content = HBox;
-    PanelSlot->Parent = Parent;
-	PanelSlot->SetPosition({ 6, 6 });
-	PanelSlot->SetAutoSize(true);
+    auto* HBoxPanelSlot = NewObject<UCanvasPanelSlot>(Parent, UCanvasPanelSlot::StaticClass(), NAME_None, RF_Transient);
+    HBoxPanelSlot->Content = HBox;
+    HBoxPanelSlot->Parent = Parent;
+	HBoxPanelSlot->SetPosition({ 6, 6 });
+	HBoxPanelSlot->SetAutoSize(true);
 
-    HBox->Slot = PanelSlot;
+    HBox->Slot = HBoxPanelSlot;
 
 	//ShowHideButton->RemoveFromParent();  // AddChild already removes from parent
 	HBox->AddChild(ShowHideButton);
 
-    UWidget* CartographMenuShowHideButton = NewObject<UWidget>(HBox, ShowHideButton->GetClass(), NAME_None, RF_Transient, ShowHideButton);
+	UWidget* CartographMenuShowHideButton = NewObject<UWidget>(HBox, MenuShowHideButtonWidget, "CartographMenuShowHideButton", RF_Transient, ShowHideButton);
     auto* HBoxSlot = Cast<UHorizontalBoxSlot>(HBox->AddChild(CartographMenuShowHideButton));
 	HBoxSlot->SetPadding({ 10, 0, 0, 0 });
 
@@ -1292,16 +1292,40 @@ void UCartographGameInstanceModule::RegisterMenuButton()
         UE_LOG(LogCartograph, Error, TEXT("mText not found"));
 		return;
     }
-	FText* Text = TextProperty->ContainerPtrToValuePtr<FText>(CartographMenuShowHideButton);
-    if (!Text)
+	FText* TextPtr = TextProperty->ContainerPtrToValuePtr<FText>(CartographMenuShowHideButton);
+    if (!TextPtr)
     {
-        UE_LOG(LogCartograph, Error, TEXT("Text not found"));
+        UE_LOG(LogCartograph, Error, TEXT("TextPtr not found"));
 		return;
     }
-    *Text = LOCTEXT("CartographMenuHide", "Hide Cartograph Menu");
+    *TextPtr = LOCTEXT("CartographMenuShow", "Show Cartograph Menu");
 
     TArray<UPanelSlot*>& MutablePanelSlots = UCartographPanelWidgetAccessor::GetPanelSlots(Parent);
-	MutablePanelSlots.Insert(PanelSlot, Index);
+	MutablePanelSlots.Insert(HBoxPanelSlot, Index);
+
+
+	const UWidget* Menu = WidgetTree->FindWidget("BPW_MapMenu");
+	if (!Menu)
+	{
+		UE_LOG(LogCartograph, Error, TEXT("Menu not found"));
+		return;
+	}
+	const auto* MenuPanelSlot = Cast<UCanvasPanelSlot>(Menu->Slot);
+    if (!MenuPanelSlot)
+    {
+        UE_LOG(LogCartograph, Error, TEXT("MenuPanelSlot not found"));
+        return;
+    }
+
+	UWidget* CartographMenu = NewObject<UWidget>(HBox, MenuWidget, "CartographMenu", RF_Transient);
+	auto* CartographMenuPanelSlot = Cast<UCanvasPanelSlot>(Parent->AddChild(CartographMenu));
+    CartographMenuPanelSlot->SetLayout(MenuPanelSlot->GetLayout());
+    CartographMenuPanelSlot->SetPosition(MenuPanelSlot->GetPosition());
+    CartographMenuPanelSlot->SetSize(MenuPanelSlot->GetSize());
+    CartographMenuPanelSlot->SetAutoSize(MenuPanelSlot->GetAutoSize());
+    CartographMenuPanelSlot->SetZOrder(MenuPanelSlot->GetZOrder());
+
+	CartographMenu->SetVisibility(ESlateVisibility::Collapsed);
 }
 
 
@@ -1342,6 +1366,20 @@ void UCartographGameInstanceModule::OnZFilterUpdated(float Min, float Max)
 	if (!IsInitializing)
 	{
         RedrawMap();
+	}
+}
+
+
+void UCartographGameInstanceModule::OnCartographMenuButtonClicked(UUserWidget* Widget, bool IsOpen)
+{
+	for (UWidget* ChildWidget : Widget->GetParent()->GetParent()->GetAllChildren())
+	{
+        if (ChildWidget->GetName() == "CartographMenu")
+        {
+            CARTO_LOG_DEBUG("CartographMenuButtonClicked: %d", IsOpen);
+            ChildWidget->SetVisibility(IsOpen ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+            break;
+        }
 	}
 }
 

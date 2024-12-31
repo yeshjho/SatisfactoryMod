@@ -3,8 +3,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: Cartograph\n"
-"POT-Creation-Date: 2024-12-23 22:40\n"
-"PO-Revision-Date: 2024-12-23 22:40\n"
+"POT-Creation-Date: 2024-12-31 08:12\n"
+"PO-Revision-Date: 2024-12-31 08:12\n"
 "Language-Team: \n"
 "Language: ko\n"
 "MIME-Version: 1.0\n"
@@ -18,4 +18,25 @@ msgstr ""
 msgctxt ",15A5F98F4C22223DA22291B04774FCCC"
 msgid "Cartograph: Initializing..."
 msgstr "Cartograph: 초기화 중..."
+
+#. Key:	43532DD3466EF1F0A0695380435CC8F1
+#. SourceLocation:	/Cartograph/UI/Widget_CartographMenuToggleButton.Widget_CartographMenuToggleButton_C:ExecuteUbergraph_Widget_CartographMenuToggleButton [Script Bytecode]
+#: /Cartograph/UI/Widget_CartographMenuToggleButton.Widget_CartographMenuToggleButton_C:ExecuteUbergraph_Widget_CartographMenuToggleButton [Script Bytecode]
+msgctxt ",43532DD3466EF1F0A0695380435CC8F1"
+msgid "Hide Cartograph Menu"
+msgstr "Cartograph 메뉴 숨기기"
+
+#. Key:	6A17ABAA4F3213DD12C711835C886F96
+#. SourceLocation:	/Cartograph/UI/Widget_CartographMenuToggleButton.Widget_CartographMenuToggleButton_C:ExecuteUbergraph_Widget_CartographMenuToggleButton [Script Bytecode]
+#: /Cartograph/UI/Widget_CartographMenuToggleButton.Widget_CartographMenuToggleButton_C:ExecuteUbergraph_Widget_CartographMenuToggleButton [Script Bytecode]
+msgctxt ",6A17ABAA4F3213DD12C711835C886F96"
+msgid "Show Cartograph Menu"
+msgstr "Cartograph 메뉴 표시"
+
+#. Key:	CartographMenuShow
+#. SourceLocation:	Mods/Cartograph/Source/Cartograph/Private/CartographGameInstanceModule.cpp(1303)
+#: Mods/Cartograph/Source/Cartograph/Private/CartographGameInstanceModule.cpp(1303)
+msgctxt "Cartograph,CartographMenuShow"
+msgid "Show Cartograph Menu"
+msgstr "Cartograph 메뉴 표시"
 
