@@ -102,6 +102,7 @@ std::partial_ordering FBuildingData::operator<=>(float Z) const noexcept
 }
 
 
+#pragma region Serialization
 FArchive& operator<<(FArchive& Ar, TArray<FVector2D>& A)
 {
 	A.CountBytes(Ar);
@@ -203,6 +204,14 @@ FArchive& operator<<(FArchive& Ar, FBeamExtraData& BeamData)
 }
 
 
+FArchive& operator<<(FArchive& Ar, FBuildingData& BuildingData)
+{
+	bool _;
+	BuildingData.NetSerialize(Ar, nullptr, _);
+	return Ar;
+}
+
+
 bool FBuildingData::NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess)
 {
 	Ar.SerializeBits(&BuildableClassHash, 32);
@@ -291,8 +300,10 @@ bool FBuildingData::NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSucce
     bOutSuccess = true;
     return true;
 }
+#pragma endregion
 
 
+#pragma region Cache
 void FBuildingData::FillInCache(TSubclassOf<AFGBuildable> OriginalBuildableClass)
 {
     DataType = EBuildingDataType::Invalid;
@@ -562,12 +573,102 @@ void FBuildingData::CalculateSplinePoints()
 }
 
 
-FArchive& operator<<(FArchive& Ar, FBuildingData& BuildingData)
+
+
+
+void UCartographGameInstanceModule::AddExtraData(FBuildingData& BuildingData, AFGBuildable* Buildable)
 {
-	bool _;
-    BuildingData.NetSerialize(Ar, nullptr, _);
-    return Ar;
+	const TSoftClassPtr<AFGBuildable> Class = Buildable->GetClass();
+	const TSoftClassPtr<AFGBuildable>* RedirectClass = BuildableClassRedirectMap.Find(Class);
+	const TSubclassOf<AFGBuildable> BuildableClass = RedirectClass ? RedirectClass->Get() : Class.Get();
+
+	if (BuildableClass->ImplementsInterface(UFGSplineBuildableInterface::StaticClass()))
+	{
+		const auto* Spline = Cast<IFGSplineBuildableInterface>(Buildable);
+		const USplineComponent* SplineComponent = Spline->GetSplineComponent();
+		BuildingData.Transform = SplineComponent->GetComponentTransform();
+
+		TArray<FVector2D> SplinePoints;
+		Algo::Transform(SplineComponent->SplineCurves.Position.Points, SplinePoints,
+			[](const FInterpCurvePoint<FVector>& Point) { return FVector2D{ Point.OutVal }; });
+		FSplineExtraData ExtraData{
+			.SplinePoints = std::move(SplinePoints),
+		};
+
+		if (const FSplineData* SplineData = BuildableSplineDataMap.Find(BuildableClass.Get());
+			!SplineData)
+		{
+			UE_LOG(LogCartograph, Warning, TEXT("Can't find spline data for %s"), *BuildableClass->GetName());
+		}
+		else if (SplineData->UseTangents)
+		{
+			TArray<FVector2D> LeaveTangents;
+			Algo::Transform(SplineComponent->SplineCurves.Position.Points, LeaveTangents,
+				[](const FInterpCurvePoint<FVector>& Point) { return FVector2D{ Point.LeaveTangent }; });
+
+			TArray<FVector2D> ArriveTangents;
+			Algo::Transform(SplineComponent->SplineCurves.Position.Points, ArriveTangents,
+				[](const FInterpCurvePoint<FVector>& Point) { return FVector2D{ Point.ArriveTangent }; });
+
+			ExtraData.Tangents = std::make_pair(std::move(LeaveTangents), std::move(ArriveTangents));
+		}
+
+		BuildingData.BuildableExtraData = std::move(ExtraData);
+		return;
+	}
+
+	if (BuildableClass->IsChildOf(AFGBuildableWire::StaticClass()))
+	{
+		const auto* Wire = Cast<AFGBuildableWire>(Buildable);
+		BuildingData.Transform.SetLocation(Wire->GetConnectionLocation(0));
+
+		BuildingData.BuildableExtraData = FWireExtraData{
+			.End = FVector2D{ Wire->GetConnectionLocation(1) },
+		};
+
+		return;
+	}
+
+	if (BuildableClass->IsChildOf(AFGBuildableBeam::StaticClass()))
+	{
+		const auto* Beam = Cast<AFGBuildableBeam>(Buildable);
+
+		BuildingData.BuildableExtraData = FBeamExtraData{
+			.Length = Beam->GetLength(),
+		};
+
+		return;
+	}
 }
+
+
+void UCartographGameInstanceModule::AfterSplineSegmentsModified()
+{
+	FCartograph_ConfigStruct ConfigInstance = FCartograph_ConfigStruct::GetActiveConfig(GetWorld());
+	for (auto& [_, SplineData] : BuildableSplineDataMap)
+	{
+		const FProperty* Property = FCartograph_ConfigStruct::StaticStruct()->FindPropertyByName(SplineData.SegmentsConfigName);
+		if (!Property)
+		{
+			UE_LOG(LogCartograph, Error, TEXT("SparsityConfigName not found: %s"), *SplineData.SegmentsConfigName.ToString());
+			continue;
+		}
+		SplineData.SegmentsCached = *Property->ContainerPtrToValuePtr<int>(&ConfigInstance);
+	}
+
+	if (!IsInWorld)
+	{
+		return;
+	}
+
+	for (FBuildingData& BuildingData : CurrentBuildingData)
+	{
+		BuildingData.CalculateSplinePoints();
+	}
+
+	RedrawMap();
+}
+#pragma endregion
 
 
 void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase)
@@ -618,6 +719,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 	}
 
 
+#pragma region Hooking
 	const auto LambdaAfterLoadGame =
 		[this](bool ReturnValue, UFGSaveSession* Instance, const FString& SaveName)
 		{
@@ -813,6 +915,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 
 		SUBSCRIBE_UOBJECT_METHOD_AFTER(AFGBuildableSubsystem, RemoveBuildable, LambdaAfterRemoveBuildable);
 	}
+#pragma endregion
 }
 
 
@@ -839,6 +942,7 @@ void UCartographGameInstanceModule::OnWorldUnloaded()
 }
 
 
+#pragma region Drawing
 // Factories/Buildings: Intentional copies
 UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
 	TArray<TWeakObjectPtr<AFGBuildable>> Factories, TMap<TSubclassOf<AFGBuildable>, TArray<FRuntimeBuildableInstanceData>> Buildings, FForceLatentCoroutine)
@@ -1082,9 +1186,9 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 		{
 			const auto& [SplineData, StartPoints, EndPoints] = std::get<FSplineDataCache>(DataCache);
             const int Num = StartPoints.Num();
-            for (int i = 0; i < Num; i++)
+            for (int j = 0; j < Num; j++)
             {
-                draw_line(Canvas, StartPoints[i], EndPoints[i], SplineData->Color, SplineData->Thickness);
+                draw_line(Canvas, StartPoints[j], EndPoints[j], SplineData->Color, SplineData->Thickness);
                 co_await Budget;
             }
 
@@ -1170,73 +1274,22 @@ void UCartographGameInstanceModule::ExecuteRedrawMapCoroutine()
 }
 
 
-void UCartographGameInstanceModule::AddExtraData(FBuildingData& BuildingData, AFGBuildable* Buildable)
+void UCartographGameInstanceModule::OnZFilterUpdated(float Min, float Max)
 {
-	const TSoftClassPtr<AFGBuildable> Class = Buildable->GetClass();
-	const TSoftClassPtr<AFGBuildable>* RedirectClass = BuildableClassRedirectMap.Find(Class);
-	const TSubclassOf<AFGBuildable> BuildableClass = RedirectClass ? RedirectClass->Get() : Class.Get();
+	const float Length = MaxHeight - MinHeight;
+	MinZFilter = FMath::Floor(Min * Length + MinHeight);
+	MaxZFilter = FMath::CeilToInt(Max * Length + MinHeight);
 
-	if (BuildableClass->ImplementsInterface(UFGSplineBuildableInterface::StaticClass()))
+	if (!IsInitializing)
 	{
-        const auto* Spline = Cast<IFGSplineBuildableInterface>(Buildable);
-		const USplineComponent* SplineComponent = Spline->GetSplineComponent();
-		BuildingData.Transform = SplineComponent->GetComponentTransform();
-
-		TArray<FVector2D> SplinePoints;
-        Algo::Transform(SplineComponent->SplineCurves.Position.Points, SplinePoints, 
-			[](const FInterpCurvePoint<FVector>& Point) { return FVector2D{ Point.OutVal }; });
-        FSplineExtraData ExtraData{
-            .SplinePoints = std::move(SplinePoints),
-        };
-
-        if (const FSplineData* SplineData = BuildableSplineDataMap.Find(BuildableClass.Get());
-			!SplineData)
-		{
-			UE_LOG(LogCartograph, Warning, TEXT("Can't find spline data for %s"), *BuildableClass->GetName());
-		}
-		else if (SplineData->UseTangents)
-		{
-			TArray<FVector2D> LeaveTangents;
-			Algo::Transform(SplineComponent->SplineCurves.Position.Points, LeaveTangents,
-				[](const FInterpCurvePoint<FVector>& Point) { return FVector2D{ Point.LeaveTangent }; });
-
-			TArray<FVector2D> ArriveTangents;
-			Algo::Transform(SplineComponent->SplineCurves.Position.Points, ArriveTangents,
-				[](const FInterpCurvePoint<FVector>& Point) { return FVector2D{ Point.ArriveTangent }; });
-
-			ExtraData.Tangents = std::make_pair(std::move(LeaveTangents), std::move(ArriveTangents));
-		}
-
-        BuildingData.BuildableExtraData = std::move(ExtraData);
-		return;
-	}
-
-	if (BuildableClass->IsChildOf(AFGBuildableWire::StaticClass()))
-	{
-		const auto* Wire = Cast<AFGBuildableWire>(Buildable);
-		BuildingData.Transform.SetLocation(Wire->GetConnectionLocation(0));
-
-        BuildingData.BuildableExtraData = FWireExtraData{
-			.End = FVector2D{ Wire->GetConnectionLocation(1) },
-        };
-
-		return;
-	}
-
-	if (BuildableClass->IsChildOf(AFGBuildableBeam::StaticClass()))
-	{
-        const auto* Beam = Cast<AFGBuildableBeam>(Buildable);
-
-        BuildingData.BuildableExtraData = FBeamExtraData{
-            .Length = Beam->GetLength(),
-        };
-
-		return;
+		RedrawMap();
 	}
 }
+#pragma endregion
 
 
-void UCartographGameInstanceModule::RegisterMenuButton()
+#pragma region UI
+void UCartographGameInstanceModule::RegisterMenuButton() const
 {
 	// Copied from WidgetBlueprintHookManager.cpp
 	class UCartographPanelWidgetAccessor : UPanelWidget
@@ -1329,59 +1382,19 @@ void UCartographGameInstanceModule::RegisterMenuButton()
 }
 
 
-void UCartographGameInstanceModule::AfterSplineSegmentsModified()
-{
-	FCartograph_ConfigStruct ConfigInstance = FCartograph_ConfigStruct::GetActiveConfig(GetWorld());
-	for (auto& [_, SplineData] : BuildableSplineDataMap)
-	{
-		const FProperty* Property = FCartograph_ConfigStruct::StaticStruct()->FindPropertyByName(SplineData.SegmentsConfigName);
-		if (!Property)
-		{
-			UE_LOG(LogCartograph, Error, TEXT("SparsityConfigName not found: %s"), *SplineData.SegmentsConfigName.ToString());
-			continue;
-		}
-		SplineData.SegmentsCached = *Property->ContainerPtrToValuePtr<int>(&ConfigInstance);
-	}
-
-	if (!IsInWorld)
-	{
-		return;
-	}
-
-    for (FBuildingData& BuildingData : CurrentBuildingData)
-    {
-        BuildingData.CalculateSplinePoints();
-    }
-
-	RedrawMap();
-}
-
-
-void UCartographGameInstanceModule::OnZFilterUpdated(float Min, float Max)
-{
-	const float Length = MaxHeight - MinHeight;
-	MinZFilter = FMath::Floor(Min * Length + MinHeight);
-    MaxZFilter = FMath::CeilToInt(Max * Length + MinHeight);
-
-	if (!IsInitializing)
-	{
-        RedrawMap();
-	}
-}
-
-
 void UCartographGameInstanceModule::OnCartographMenuButtonClicked(UUserWidget* Widget, bool IsOpen)
 {
 	for (UWidget* ChildWidget : Widget->GetParent()->GetParent()->GetAllChildren())
 	{
-        if (ChildWidget->GetName() == "CartographMenu")
-        {
-            CARTO_LOG_DEBUG("CartographMenuButtonClicked: %d", IsOpen);
-            ChildWidget->SetVisibility(IsOpen ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
-            break;
-        }
+		if (ChildWidget->GetName() == "CartographMenu")
+		{
+			CARTO_LOG_DEBUG("CartographMenuButtonClicked: %d", IsOpen);
+			ChildWidget->SetVisibility(IsOpen ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+			break;
+		}
 	}
 }
+#pragma endregion
 
 
 #if WITH_EDITOR

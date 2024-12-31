@@ -186,7 +186,7 @@ struct FWireData
 /**
  * 
  */
-UCLASS(PrioritizeCategories=("Data", "UI", "Advanced", "Default", "Generated Data"))
+UCLASS(PrioritizeCategories=("Draw Data", "UI", "Advanced", "Default", "Generated Data"))
 class CARTOGRAPH_API UCartographGameInstanceModule : public UGameInstanceModule
 {
 	GENERATED_BODY()
@@ -211,7 +211,7 @@ private:
 
 	void AddExtraData(FBuildingData& BuildingData, AFGBuildable* Buildable);
 
-	void RegisterMenuButton();
+	void RegisterMenuButton() const;
 
 #if WITH_EDITOR
 	virtual void PostCDOContruct() override;
@@ -239,31 +239,31 @@ public:
     TMap<TSubclassOf<AFGBuildable>, uint32> ClassPtrToClassIDMap;
 
 
-	UPROPERTY(EditDefaultsOnly, Category = "Data")
+	UPROPERTY(EditDefaultsOnly, Category = "Draw Data")
 	TMap<TSoftClassPtr<UFGBuildCategory>, FCategoryData> BuildCategoryDataMap;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Data")
+	UPROPERTY(EditDefaultsOnly, Category = "Draw Data")
 	TMap<TSoftClassPtr<AFGBuildable>, FCategoryData> BuildableBuildCategoryDataOverrideMap;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Data")
+	UPROPERTY(EditDefaultsOnly, Category = "Draw Data")
 	TMap<TSubclassOf<UFGFactoryCustomizationDescriptor_Material>, FCategoryData> MaterialBuildCategoryDataOverrideMap;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Data")
+	UPROPERTY(EditDefaultsOnly, Category = "Draw Data")
 	TMap<TSoftClassPtr<AFGBuildable>, TSoftObjectPtr<UTexture2D>> BuildableIconOverrideMap;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Data")
+	UPROPERTY(EditDefaultsOnly, Category = "Draw Data")
 	TMap<TSoftClassPtr<AFGBuildable>, FVector2D> BuildableSizeOverrideMap;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Data")
+	UPROPERTY(EditDefaultsOnly, Category = "Draw Data")
 	TMap<TSoftClassPtr<AFGBuildable>, FRotator> BuildableExtraRotationMap;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Data")
+	UPROPERTY(EditDefaultsOnly, Category = "Draw Data")
 	TMap<TSoftClassPtr<AFGBuildable>, FSplineData> BuildableSplineDataMap;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Data")
+	UPROPERTY(EditDefaultsOnly, Category = "Draw Data")
     TMap<TSoftClassPtr<AFGBuildable>, FWireData> BuildableWireDataMap;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Data")
+	UPROPERTY(EditDefaultsOnly, Category = "Draw Data")
 	TMap<TSoftClassPtr<AFGBuildable>, TSoftClassPtr<AFGBuildable>> BuildableClassRedirectMap;
 
 protected:
