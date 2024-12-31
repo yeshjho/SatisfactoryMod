@@ -20,7 +20,7 @@ class UFGBuildCategory;
 DECLARE_LOG_CATEGORY_EXTERN(LogCartograph, Display, All);
 
 
-constexpr bool ENABLE_DEBUG_LOG = false;
+constexpr bool ENABLE_DEBUG_LOG = true;
 constexpr bool ENABLE_VERBOSE_LOG = false;
 constexpr bool ENABLE_VERY_VERBOSE_LOG = false;
 #define CARTO_LOG_DEBUG(format, ...) if constexpr (ENABLE_DEBUG_LOG) UE_LOG(LogCartograph, Display, TEXT(format) __VA_OPT__(, __VA_ARGS__))
@@ -183,10 +183,37 @@ struct FWireData
 };
 
 
+USTRUCT()
+struct FLayerSubCategoryData
+{
+	GENERATED_BODY()
+
+    UPROPERTY(EditDefaultsOnly)
+    FName Name;
+
+	UPROPERTY(EditDefaultsOnly)
+	FText DisplayName;
+
+	/** Lower = Earlier in the list **/
+	UPROPERTY(EditDefaultsOnly)
+	int Priority;
+};
+
+
+USTRUCT()
+struct FLayerCategoryData : public FLayerSubCategoryData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditDefaultsOnly)
+	TArray<FLayerSubCategoryData> SubCategories;
+};
+
+
 /**
  * 
  */
-UCLASS(PrioritizeCategories=("Draw Data", "UI", "Advanced", "Default", "Generated Data"))
+UCLASS(PrioritizeCategories=("Draw Data", "Layer Data", "UI", "Advanced", "Default", "Generated Data"))
 class CARTOGRAPH_API UCartographGameInstanceModule : public UGameInstanceModule
 {
 	GENERATED_BODY()
@@ -265,6 +292,10 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, Category = "Draw Data")
 	TMap<TSoftClassPtr<AFGBuildable>, TSoftClassPtr<AFGBuildable>> BuildableClassRedirectMap;
+
+
+	UPROPERTY(EditDefaultsOnly, Category = "Layer Data")
+	TArray<FLayerCategoryData> LayerCategories;
 
 protected:
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
