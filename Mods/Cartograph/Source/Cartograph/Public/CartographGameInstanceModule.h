@@ -185,30 +185,40 @@ struct FWireData
 };
 
 
-USTRUCT(BlueprintType)
+USTRUCT()
 struct FLayerSubCategoryData
 {
 	GENERATED_BODY()
 
-    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
+    UPROPERTY(EditDefaultsOnly)
     FName Name;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
+	UPROPERTY(EditDefaultsOnly)
 	FText DisplayName;
 
 	/** Lower = Earlier in the list **/
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
+	UPROPERTY(EditDefaultsOnly)
 	int Priority;
 };
 
 
-USTRUCT(BlueprintType)
+USTRUCT()
 struct FLayerCategoryData : public FLayerSubCategoryData
 {
     GENERATED_BODY()
 
-    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
+    UPROPERTY(EditDefaultsOnly)
 	TArray<FLayerSubCategoryData> SubCategories;
+};
+
+
+USTRUCT()
+struct FBuildLayerData
+{
+	GENERATED_BODY()
+
+    UPROPERTY(EditDefaultsOnly, meta = (GetOptions = "GetLayerCategoryOptions"))
+	FString Category;
 };
 
 
@@ -260,6 +270,9 @@ private:
 	UFUNCTION(BlueprintCallable)
 	void OnShowBuildingsCheckboxChanged(bool DoShow);
 
+	UFUNCTION()
+	TArray<FString> GetLayerCategoryOptions() const;
+
 
 public:
 	inline static UCartographGameInstanceModule* Instance = nullptr;
@@ -271,36 +284,48 @@ public:
     TMap<TSubclassOf<AFGBuildable>, uint32> ClassPtrToClassIDMap;
 
 
-	UPROPERTY(EditDefaultsOnly, Category = "Draw Data")
+	UPROPERTY(EditDefaultsOnly, Category = "Draw Data/Category Data")
 	TMap<TSoftClassPtr<UFGBuildCategory>, FCategoryData> BuildCategoryDataMap;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Draw Data")
+	UPROPERTY(EditDefaultsOnly, Category = "Draw Data/Category Data")
 	TMap<TSoftClassPtr<AFGBuildable>, FCategoryData> BuildableBuildCategoryDataOverrideMap;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Draw Data")
+	UPROPERTY(EditDefaultsOnly, Category = "Draw Data/Category Data")
 	TMap<TSubclassOf<UFGFactoryCustomizationDescriptor_Material>, FCategoryData> MaterialBuildCategoryDataOverrideMap;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Draw Data")
+
+	UPROPERTY(EditDefaultsOnly, Category = "Draw Data/Override")
 	TMap<TSoftClassPtr<AFGBuildable>, TSoftObjectPtr<UTexture2D>> BuildableIconOverrideMap;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Draw Data")
+	UPROPERTY(EditDefaultsOnly, Category = "Draw Data/Override")
 	TMap<TSoftClassPtr<AFGBuildable>, FVector2D> BuildableSizeOverrideMap;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Draw Data")
+	UPROPERTY(EditDefaultsOnly, Category = "Draw Data/Override")
 	TMap<TSoftClassPtr<AFGBuildable>, FRotator> BuildableExtraRotationMap;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Draw Data")
+
+	UPROPERTY(EditDefaultsOnly, Category = "Draw Data/Special Data")
 	TMap<TSoftClassPtr<AFGBuildable>, FSplineData> BuildableSplineDataMap;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Draw Data")
+	UPROPERTY(EditDefaultsOnly, Category = "Draw Data/Special Data")
     TMap<TSoftClassPtr<AFGBuildable>, FWireData> BuildableWireDataMap;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Draw Data")
+
+	UPROPERTY(EditDefaultsOnly, Category = "Default")
 	TMap<TSoftClassPtr<AFGBuildable>, TSoftClassPtr<AFGBuildable>> BuildableClassRedirectMap;
 
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Layer Data")
+	UPROPERTY(EditDefaultsOnly, Category = "Layer Data")
 	TArray<FLayerCategoryData> LayerCategories;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Layer Data")
+	TMap<TSoftClassPtr<UFGBuildCategory>, FBuildLayerData> BuildLayerDataMap;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Layer Data")
+	TMap<TSoftClassPtr<AFGBuildable>, FBuildLayerData> BuildableBuildLayerDataOverrideMap;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Layer Data")
+	TMap<TSubclassOf<UFGFactoryCustomizationDescriptor_Material>, FBuildLayerData> MaterialBuildLayerDataOverrideMap;
 
 protected:
 	UPROPERTY(EditDefaultsOnly, Category = "UI")

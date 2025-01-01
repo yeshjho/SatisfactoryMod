@@ -14,8 +14,20 @@ class CARTOGRAPH_API UCartographMenuLayerItemWidget : public UCartographMenuItem
 	GENERATED_BODY()
 
 public:
+    UFUNCTION(BlueprintImplementableEvent)
+    void Initialize(const FName& LayerCategory, const FName& LayerSubCategory, UTexture2D* Icon, const FText& BuildingName);
 
 
 private:
-	virtual const FText& GetTextForSearching() override;
+
+
+protected:
+    UPROPERTY(BlueprintReadWrite)
+    FName LayerCategory;
+
+    UPROPERTY(BlueprintReadWrite)
+    FName LayerSubCategory;
+
+    UPROPERTY(BlueprintReadWrite)
+    FText BuildingName;
 };

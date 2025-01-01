@@ -707,6 +707,18 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 		}
 	}
 
+	for (const auto& [Material, LayerData] : MaterialBuildLayerDataOverrideMap)
+	{
+		for (const auto& [_, Recipe] : Cast<UFGFactoryCustomizationDescriptor_Material>(Material->ClassDefaultObject)->GetBuildableMap())
+		{
+			TSubclassOf<AFGBuildable> Buildable = Cast<UFGBuildingDescriptor>(UFGRecipe::GetDescriptorForRecipe(Recipe)->ClassDefaultObject)->mBuildableClass;
+			if (!BuildableBuildLayerDataOverrideMap.Contains(Buildable.Get()))
+			{
+				BuildableBuildLayerDataOverrideMap.Add(Buildable.Get(), LayerData);
+			}
+		}
+	}
+
 	AfterSplineSegmentsModified();
 
 	// Wanted to do this in Blueprint, inheriting BP_CP_Int, but couldn't get the module manager there.
@@ -1421,6 +1433,22 @@ void UCartographGameInstanceModule::OnCartographMenuButtonClicked(UUserWidget* W
 void UCartographGameInstanceModule::OnShowBuildingsCheckboxChanged(bool DoShow)
 {
     DoShowBuildings = DoShow;
+}
+
+
+TArray<FString> UCartographGameInstanceModule::GetLayerCategoryOptions() const
+{
+	TArray<FString> Options;
+	for (const FLayerCategoryData& LayerCategory : LayerCategories)
+	{
+		Options.Add(LayerCategory.Name.ToString());
+
+		for (const FLayerSubCategoryData& LayerSubCategory : LayerCategory.SubCategories)
+		{
+			Options.Add(FString::Printf(TEXT("%s/%s"), *LayerCategory.Name.ToString(), *LayerSubCategory.Name.ToString()));
+		}
+	}
+	return Options;
 }
 #pragma endregion
 

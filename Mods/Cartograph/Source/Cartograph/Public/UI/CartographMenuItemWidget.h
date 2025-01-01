@@ -17,6 +17,4 @@ public:
 
 
 private:
-    UFUNCTION(BlueprintCallable)
-	virtual const FText& GetTextForSearching();
 };

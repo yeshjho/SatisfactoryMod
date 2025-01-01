@@ -91,12 +91,21 @@ private:
     void InitializeHeadings(UPanelWidget* Panel);
 
 	UFUNCTION(BlueprintCallable)
-	void InitializeLayers(UPanelWidget* Panel);
+	void InitializeLayers();
+
+    UFUNCTION(BlueprintCallable)
+    void PostInitialize();
 
 
 protected:
     UPROPERTY(EditDefaultsOnly)
     TSubclassOf<UUserWidget> CategoryWidgetType;
+
+    UPROPERTY(EditDefaultsOnly)
+    TSubclassOf<UUserWidget> CategoryLayerToggleItemWidgetType;
+
+    UPROPERTY(EditDefaultsOnly)
+    TSubclassOf<UUserWidget> CategoryLayerItemWidgetType;
 
     UPROPERTY(EditDefaultsOnly)
     TArray<FHeadingData> HeadingData;

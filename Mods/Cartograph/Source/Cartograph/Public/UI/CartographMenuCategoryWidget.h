@@ -27,10 +27,13 @@ public:
 	void Initialize(ECategoryType CategoryType, const FText& Text);
 
 	UFUNCTION(BlueprintImplementableEvent)
+	void PostInitialize();
+
+	UFUNCTION(BlueprintImplementableEvent)
 	void AddCategory(UWidget* Widget);
 
 	UFUNCTION(BlueprintImplementableEvent)
-	void AddItem(UWidget* Widget);
+	void AddItem(UWidget* Widget, bool ShouldFillUp);
 	
 	UFUNCTION(BlueprintImplementableEvent)
 	void SetExpanded(bool DoExpand);
