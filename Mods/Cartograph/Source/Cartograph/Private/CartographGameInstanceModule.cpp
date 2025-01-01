@@ -934,26 +934,14 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 
 					const auto* Widget = Cast<UUserWidget>(Helper.GetContext());
 					UWidget* Menu = Widget->WidgetTree->FindWidget("CartographMenu");
-					if (!Menu)
-					{
-                        UE_LOG(LogCartograph, Error, TEXT("Failed to find CartographMenu"));
-                        return;
-                    }
+					CARTO_LOG_ERROR_RETURN_IF_NULL(Menu);
 					Menu->SetVisibility(ESlateVisibility::Collapsed);
 
 					UWidget* Button = Widget->WidgetTree->FindWidget("CartographMenuShowHideButton");
-                    if (!Button)
-                    {
-                        UE_LOG(LogCartograph, Error, TEXT("Failed to find CartographMenuShowHideButton"));
-                        return;
-                    }
+					CARTO_LOG_ERROR_RETURN_IF_NULL(Button);
 
 					FProperty* IsOpenProperty = Button->GetClass()->FindPropertyByName("IsOpen");
-                    if (!IsOpenProperty)
-                    {
-                        UE_LOG(LogCartograph, Error, TEXT("Failed to find IsOpen property"));
-                        return;
-                    }
+                    CARTO_LOG_ERROR_RETURN_IF_NULL(IsOpenProperty);
 					*IsOpenProperty->ContainerPtrToValuePtr<bool>(Button) = false;
 
 					FOutputDeviceNull Ar;
@@ -1361,11 +1349,7 @@ void UCartographGameInstanceModule::RegisterMenuButton() const
 	UWidgetTree* WidgetTree = WidgetBlueprintClass->GetWidgetTreeArchetype();
 
 	UWidget* ShowHideButton = WidgetTree->FindWidget("ShowHideButton");
-	if (!ShowHideButton)
-	{
-        UE_LOG(LogCartograph, Error, TEXT("ShowHideButton not found"));
-		return;
-	}
+    CARTO_LOG_ERROR_RETURN_IF_NULL(ShowHideButton);
 	int32 Index;
 	UPanelWidget* Parent = UWidgetTree::FindWidgetParent(ShowHideButton, Index);
 
@@ -1387,17 +1371,9 @@ void UCartographGameInstanceModule::RegisterMenuButton() const
 	HBoxSlot->SetPadding({ 10, 0, 0, 0 });
 
 	FProperty* TextProperty = CartographMenuShowHideButton->GetClass()->FindPropertyByName("mText");
-    if (!TextProperty)
-    {
-        UE_LOG(LogCartograph, Error, TEXT("mText not found"));
-		return;
-    }
+    CARTO_LOG_ERROR_RETURN_IF_NULL(TextProperty);
 	FText* TextPtr = TextProperty->ContainerPtrToValuePtr<FText>(CartographMenuShowHideButton);
-    if (!TextPtr)
-    {
-        UE_LOG(LogCartograph, Error, TEXT("TextPtr not found"));
-		return;
-    }
+    CARTO_LOG_ERROR_RETURN_IF_NULL(TextPtr);
     *TextPtr = LOCTEXT("CartographMenuShow", "Show Cartograph Menu");
 
     TArray<UPanelSlot*>& MutablePanelSlots = UCartographPanelWidgetAccessor::GetPanelSlots(Parent);
@@ -1405,17 +1381,9 @@ void UCartographGameInstanceModule::RegisterMenuButton() const
 
 
 	const UWidget* Menu = WidgetTree->FindWidget("BPW_MapMenu");
-	if (!Menu)
-	{
-		UE_LOG(LogCartograph, Error, TEXT("Menu not found"));
-		return;
-	}
+    CARTO_LOG_ERROR_RETURN_IF_NULL(Menu);
 	const auto* MenuPanelSlot = Cast<UCanvasPanelSlot>(Menu->Slot);
-    if (!MenuPanelSlot)
-    {
-        UE_LOG(LogCartograph, Error, TEXT("MenuPanelSlot not found"));
-        return;
-    }
+    CARTO_LOG_ERROR_RETURN_IF_NULL(MenuPanelSlot);
 
 	UWidget* CartographMenu = NewObject<UWidget>(HBox, MenuWidget, "CartographMenu", RF_Transient);
 	auto* CartographMenuPanelSlot = Cast<UCanvasPanelSlot>(Parent->AddChild(CartographMenu));
@@ -1443,11 +1411,7 @@ void UCartographGameInstanceModule::OnCartographMenuButtonClicked(UUserWidget* W
 	if (IsOpen)
 	{
 		auto* RootWidget = Cast<UWidget>(Widget->GetParent()->GetOuter()->GetOuter());
-        if (!RootWidget)
-        {
-            UE_LOG(LogCartograph, Error, TEXT("RootWidget not found"));
-            return;
-        }
+        CARTO_LOG_ERROR_RETURN_IF_NULL(RootWidget);
 		FOutputDeviceNull Ar;
 		RootWidget->CallFunctionByNameWithArguments(TEXT("SetFiltersCollapsed 1"), Ar, nullptr, true);
 	}
