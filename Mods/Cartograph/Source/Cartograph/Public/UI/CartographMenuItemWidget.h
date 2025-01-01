@@ -1,0 +1,22 @@
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Blueprint/UserWidget.h"
+#include "CartographMenuItemWidget.generated.h"
+
+
+/**
+ * 
+ */
+UCLASS(Abstract)
+class CARTOGRAPH_API UCartographMenuItemWidget : public UUserWidget
+{
+	GENERATED_BODY()
+
+public:
+
+
+private:
+    UFUNCTION(BlueprintCallable)
+	virtual const FText& GetTextForSearching();
+};

@@ -185,29 +185,29 @@ struct FWireData
 };
 
 
-USTRUCT()
+USTRUCT(BlueprintType)
 struct FLayerSubCategoryData
 {
 	GENERATED_BODY()
 
-    UPROPERTY(EditDefaultsOnly)
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
     FName Name;
 
-	UPROPERTY(EditDefaultsOnly)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
 	FText DisplayName;
 
 	/** Lower = Earlier in the list **/
-	UPROPERTY(EditDefaultsOnly)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
 	int Priority;
 };
 
 
-USTRUCT()
+USTRUCT(BlueprintType)
 struct FLayerCategoryData : public FLayerSubCategoryData
 {
     GENERATED_BODY()
 
-    UPROPERTY(EditDefaultsOnly)
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
 	TArray<FLayerSubCategoryData> SubCategories;
 };
 
@@ -257,6 +257,9 @@ private:
 	UFUNCTION(BlueprintCallable)
 	void OnCartographMenuButtonClicked(UUserWidget* Widget, bool IsOpen);
 
+	UFUNCTION(BlueprintCallable)
+	void OnShowBuildingsCheckboxChanged(bool DoShow);
+
 
 public:
 	inline static UCartographGameInstanceModule* Instance = nullptr;
@@ -296,7 +299,7 @@ public:
 	TMap<TSoftClassPtr<AFGBuildable>, TSoftClassPtr<AFGBuildable>> BuildableClassRedirectMap;
 
 
-	UPROPERTY(EditDefaultsOnly, Category = "Layer Data")
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Layer Data")
 	TArray<FLayerCategoryData> LayerCategories;
 
 protected:
@@ -340,4 +343,7 @@ protected:
 	float MinHeight = -100;
 	UPROPERTY(BlueprintReadOnly)
 	float MaxHeight = 100;
+
+    UPROPERTY(BlueprintReadOnly)
+    bool DoShowBuildings = true;
 };

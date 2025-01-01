@@ -1416,6 +1416,12 @@ void UCartographGameInstanceModule::OnCartographMenuButtonClicked(UUserWidget* W
 		RootWidget->CallFunctionByNameWithArguments(TEXT("SetFiltersCollapsed 1"), Ar, nullptr, true);
 	}
 }
+
+
+void UCartographGameInstanceModule::OnShowBuildingsCheckboxChanged(bool DoShow)
+{
+    DoShowBuildings = DoShow;
+}
 #pragma endregion
 
 
