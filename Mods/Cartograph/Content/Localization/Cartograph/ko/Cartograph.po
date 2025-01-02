@@ -3,8 +3,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: Cartograph\n"
-"POT-Creation-Date: 2025-01-01 17:42\n"
-"PO-Revision-Date: 2025-01-01 17:42\n"
+"POT-Creation-Date: 2025-01-02 03:51\n"
+"PO-Revision-Date: 2025-01-02 03:51\n"
 "Language-Team: \n"
 "Language: ko\n"
 "MIME-Version: 1.0\n"
@@ -53,6 +53,20 @@ msgstr "카테고리 비활성화"
 msgctxt ",6DADE62F40A7D199A699CFBF27C57E72"
 msgid "Disable Category"
 msgstr "카테고리 비활성화"
+
+#. Key:	67BA60F64DD0D882A1CD8EBD223243AA
+#. SourceLocation:	/Cartograph/UI/Menu/BPW_CartographMenuLayerToggleWidget.BPW_CartographMenuLayerToggleWidget_C:WidgetTree.mName_1.Text
+#: /Cartograph/UI/Menu/BPW_CartographMenuLayerToggleWidget.BPW_CartographMenuLayerToggleWidget_C:WidgetTree.mName_1.Text
+msgctxt ",67BA60F64DD0D882A1CD8EBD223243AA"
+msgid "Select All"
+msgstr "전체 선택"
+
+#. Key:	FB238CD04B7D448FFFC325AB147A0EE7
+#. SourceLocation:	/Cartograph/UI/Menu/BPW_CartographMenuLayerToggleWidget.BPW_CartographMenuLayerToggleWidget_C:WidgetTree.mName_2.Text
+#: /Cartograph/UI/Menu/BPW_CartographMenuLayerToggleWidget.BPW_CartographMenuLayerToggleWidget_C:WidgetTree.mName_2.Text
+msgctxt ",FB238CD04B7D448FFFC325AB147A0EE7"
+msgid "Deselect All"
+msgstr "전체 선택 해제"
 
 #. Key:	43532DD3466EF1F0A0695380435CC8F1
 #. SourceLocation:	/Cartograph/UI/Menu/Widget_CartographMenuToggleButton.Widget_CartographMenuToggleButton_C:SetShowHideText [Script Bytecode]
