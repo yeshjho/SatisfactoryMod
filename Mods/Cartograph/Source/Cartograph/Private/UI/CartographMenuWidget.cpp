@@ -4,7 +4,6 @@
 
 #include "FGBuildable.h"
 #include "FGBuildingDescriptor.h"
-#include "FGBuildSubCategory.h"
 #include "FGRecipeManager.h"
 
 #include "CartographGameInstanceModule.h"
@@ -43,7 +42,7 @@ void UCartographMenuWidget::InitializeLayers()
         CategoryWidget->Initialize(ECategoryType::MainCategory, CategoryData.DisplayName);
         LayerHeading.CategoryWidget->AddCategory(CategoryWidget);
         auto* ToggleItemWidget = CreateWidget<UCartographLayerToggleItemWidget>(this, CategoryLayerToggleItemWidgetType);
-        ToggleItemWidget->Initialize(CategoryData.Name, FName{});
+        ToggleItemWidget->Initialize_Native(CategoryData.Name, FName{});
         CategoryWidget->AddItem(ToggleItemWidget, true);
         FMainCategoryItem MainCategoryItem{
             CategoryData.DisplayName,
@@ -57,7 +56,7 @@ void UCartographMenuWidget::InitializeLayers()
             SubCategoryWidget->Initialize(ECategoryType::SubCategory, SubCategoryData.DisplayName);
             CategoryWidget->AddCategory(SubCategoryWidget);
             auto* ToggleItemWidgetSub= CreateWidget<UCartographLayerToggleItemWidget>(this, CategoryLayerToggleItemWidgetType);
-            ToggleItemWidget->Initialize(CategoryData.Name, SubCategoryData.Name);
+            ToggleItemWidgetSub->Initialize_Native(CategoryData.Name, SubCategoryData.Name);
             SubCategoryWidget->AddItem(ToggleItemWidgetSub, true);
             MainCategoryItem.SubCategories.Add(SubCategoryData.Name, FSubCategoryItem{
                 .DisplayName = SubCategoryData.DisplayName,
@@ -80,6 +79,20 @@ void UCartographMenuWidget::InitializeLayers()
         const TSoftClassPtr<AFGBuildable>* RedirectClass = BuildableClassRedirectMap.Find(OriginalBuildableClass.Get());
         const TSubclassOf<AFGBuildable> BuildableClass = RedirectClass ? RedirectClass->LoadSynchronous() : OriginalBuildableClass.Get();
 
+        const uint32* ClassHash = UCartographGameInstanceModule::Instance->ClassPtrToClassIDMap.Find(BuildableClass);
+        if (!ClassHash)
+        {
+            UE_LOG(LogCartograph, Error, TEXT("Can't find hash for %s"), *BuildableClass->GetName());
+            continue;
+        }
+
+        const FBuildLayerData* LayerData = UCartographGameInstanceModule::Instance->GetBuildLayerData(*ClassHash);
+        if (!LayerData)
+        {
+            UE_LOG(LogCartograph, Warning, TEXT("Can't find layer data for %s"), *BuildableClass->GetName());
+            continue;
+        }
+
         const TSubclassOf<UFGBuildingDescriptor> Descriptor = RecipeManager->FindBuildingDescriptorByClass(BuildableClass);
         if (!Descriptor)
         {
@@ -89,59 +102,31 @@ void UCartographMenuWidget::InitializeLayers()
         const FText BuildingName = UFGItemDescriptor::GetItemName(Descriptor);
         UTexture2D* Icon = UFGItemDescriptor::GetSmallIcon(Descriptor);
 
-        auto& BuildableBuildLayerDataOverrideMap = UCartographGameInstanceModule::Instance->BuildableBuildLayerDataOverrideMap;
-        const FBuildLayerData* LayerData = BuildableBuildLayerDataOverrideMap.Find(BuildableClass.Get());
-        if (!LayerData)
-        {
-            auto& BuildLayerDataMap = UCartographGameInstanceModule::Instance->BuildLayerDataMap;
-            if (TArray<TSubclassOf<UFGCategory>> Subcategories = UFGItemDescriptor::GetSubCategoriesOfClass(Descriptor, UFGBuildSubCategory::StaticClass());
-                !Subcategories.IsEmpty())
-            {
-                LayerData = BuildLayerDataMap.Find(Subcategories[0].Get());
-            }
-            if (!LayerData)
-            {
-                const TSubclassOf<UFGBuildCategory> Category = UFGBuildingDescriptor::GetBuildCategory(Descriptor);
-                LayerData = BuildLayerDataMap.Find(Category.Get());
-            }
-        }
-
-        if (!LayerData)
-        {
-            UE_LOG(LogCartograph, Warning, TEXT("Can't find layer data for %s"), *BuildableClass->GetName());
-            continue;
-        }
-
-        TArray<FString> CategoryNames;
-        LayerData->Category.ParseIntoArray(CategoryNames, TEXT("/"));
-
-        const FName MainCategoryName{ CategoryNames[0] };
-        FMainCategoryItem* MainCategoryItem = LayerHeading.MainCategories.Find(MainCategoryName);
+        FMainCategoryItem* MainCategoryItem = LayerHeading.MainCategories.Find(LayerData->MainCategoryCache);
         if (!MainCategoryItem)
         {
-            UE_LOG(LogCartograph, Warning, TEXT("Can't find main category %s"), *MainCategoryName.ToString());
+            UE_LOG(LogCartograph, Warning, TEXT("Can't find main category %s"), *LayerData->MainCategoryCache.ToString());
             continue;
         }
 
-        if (CategoryNames.Num() == 1)
+        if (LayerData->SubCategoryCache.IsNone())
         {
             auto* ItemWidget = CreateWidget<UCartographMenuLayerItemWidget>(this, CategoryLayerItemWidgetType);
-            ItemWidget->Initialize(MainCategoryName, NAME_None, Icon, BuildingName);
+            ItemWidget->Initialize_Native(LayerData->MainCategoryCache, NAME_None, *ClassHash, Icon, BuildingName);
             MainCategoryItem->CategoryWidget->AddItem(ItemWidget, false);
             MainCategoryItem->Items.Add(NAME_None, FMenuItem{ BuildingName , ItemWidget });
         }
         else
         {
-            const FName SubCategoryName{ CategoryNames[1] };
-            FSubCategoryItem* SubCategoryItem = MainCategoryItem->SubCategories.Find(SubCategoryName);
+            FSubCategoryItem* SubCategoryItem = MainCategoryItem->SubCategories.Find(LayerData->SubCategoryCache);
             if (!SubCategoryItem)
             {
-                UE_LOG(LogCartograph, Warning, TEXT("Can't find sub category %s"), *SubCategoryName.ToString());
+                UE_LOG(LogCartograph, Warning, TEXT("Can't find sub category %s"), *LayerData->SubCategoryCache.ToString());
                 continue;
             }
 
             auto* ItemWidget = CreateWidget<UCartographMenuLayerItemWidget>(this, CategoryLayerItemWidgetType);
-            ItemWidget->Initialize(MainCategoryName, SubCategoryName, Icon, BuildingName);
+            ItemWidget->Initialize_Native(LayerData->MainCategoryCache, LayerData->SubCategoryCache, *ClassHash, Icon, BuildingName);
             SubCategoryItem->CategoryWidget->AddItem(ItemWidget, false);
             SubCategoryItem->Items.Add(NAME_None, FMenuItem{ BuildingName , ItemWidget });
         }

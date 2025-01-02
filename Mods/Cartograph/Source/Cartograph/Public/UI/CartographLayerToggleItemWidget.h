@@ -5,6 +5,9 @@
 #include "CartographLayerToggleItemWidget.generated.h"
 
 
+class UCartographGameInstanceModule;
+
+
 /**
  * 
  */
@@ -14,10 +17,22 @@ class CARTOGRAPH_API UCartographLayerToggleItemWidget : public UCartographMenuIt
 	GENERATED_BODY()
 
 public:
-	UFUNCTION(BlueprintImplementableEvent)
-	void Initialize(const FName& MainCategory, const FName& SubCategory);
+    void Initialize_Native(const FName& MainCategory, const FName& SubCategory);
 
 private:
+    UFUNCTION(BlueprintCallable)
+    void OnClicked(bool IsChecked) const;
+
+    UFUNCTION(BlueprintCallable)
+    bool GetInitialStatus() const;
+
+    UFUNCTION(BlueprintCallable)
+    void SelectOrDeselectAll(bool DoSelect);
+
+
+protected:
+    UPROPERTY(BlueprintReadWrite)
+    UCartographGameInstanceModule* GameInstanceModule;
 
 
 protected:

@@ -108,6 +108,8 @@ struct FBuildingData
 
     EBuildingDataType DataType = EBuildingDataType::Invalid;
 	std::variant<FNormalDataCache, FSplineDataCache, const struct FWireData*> DataCache;
+    const struct FBuildLayerData* LayerDataCache;
+
 
     bool NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess);
 
@@ -116,7 +118,7 @@ struct FBuildingData
     std::partial_ordering operator<=>(float Z) const noexcept;
 
 	void FillInCache(TSubclassOf<AFGBuildable> OriginalBuildableClass);  // Call it after filling in the extra data
-    void FillInHash(TSubclassOf<AFGBuildable> BuildableClass);  // Call it after filling in the extra data
+    void FillInHash(TSubclassOf<AFGBuildable> OriginalBuildableClass);  // Call it after filling in the extra data
 	void FillInHashAndCache(TSubclassOf<AFGBuildable> BuildableClass);  // Call it after filling in the extra data
     void CalculateSplinePoints();  // Call it after filling in the extra data & cache
 };
@@ -219,6 +221,17 @@ struct FBuildLayerData
 
     UPROPERTY(EditDefaultsOnly, meta = (GetOptions = "GetLayerCategoryOptions"))
 	FString Category;
+
+	FName MainCategoryCache;
+    FName SubCategoryCache;
+};
+
+
+struct FRuntimeConfig
+{
+	TSet<FName> DisabledLayerMainCategory;
+	TMap<FName, TSet<FName>> DisabledLayerSubCategory;
+	TSet<uint32> DisabledLayerBuildable;
 };
 
 
@@ -239,9 +252,14 @@ public:
 	void OnWorldLoaded();
 	void OnWorldUnloaded();
 
+	void OnLayerConfigChanged();
+
+	void FillBuildLayerDataCache();
+	const FBuildLayerData* GetBuildLayerData(uint32 ClassHash);
+
 private:
+	void RedrawMap();
 	UE5Coro::TCoroutine<> InitialBuildableGather(TArray<TWeakObjectPtr<AFGBuildable>> Factories, TMap<TSubclassOf<AFGBuildable>, TArray<FRuntimeBuildableInstanceData>> Buildings, FForceLatentCoroutine = {});
-    void RedrawMap();
 	UE5Coro::TCoroutine<> RedrawMapCoroutine(TArray<FBuildingData> AddedBuildings, TArray<FBuildingData> RemovedBuildings, FForceLatentCoroutine = {});
 
 	void OnCoroutineFinishedOrCancelled();
@@ -251,6 +269,9 @@ private:
 	void AddExtraData(FBuildingData& BuildingData, AFGBuildable* Buildable);
 
 	void RegisterMenuButton() const;
+
+	void LoadRuntimeConfig();
+    void SaveRuntimeConfig();
 
 #if WITH_EDITOR
 	virtual void PostCDOContruct() override;
@@ -276,6 +297,11 @@ private:
 
 public:
 	inline static UCartographGameInstanceModule* Instance = nullptr;
+
+	FRuntimeConfig RuntimeConfig;
+
+	TMap<uint32, const FBuildLayerData*> BuildLayerDataMapCache;
+
 
 	// Made it editable since it doesn't get cleared properly sometimes.
 	UPROPERTY(EditDefaultsOnly, Category = "Generated Data")

@@ -27,6 +27,15 @@ public:
     UPROPERTY(BlueprintReadWrite)
     int32 HypertubeSegments{};
 
+    UPROPERTY(BlueprintReadWrite)
+    FString MainCategoryToggle{};
+
+    UPROPERTY(BlueprintReadWrite)
+    FString SubCategoryToggle{};
+
+    UPROPERTY(BlueprintReadWrite)
+    FString BuildingToggle{};
+
     /* Retrieves active configuration value and returns object of this struct containing it */
     static FCartograph_ConfigStruct GetActiveConfig(UObject* WorldContext) {
         FCartograph_ConfigStruct ConfigStruct{};

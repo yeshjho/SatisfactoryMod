@@ -41,6 +41,13 @@ void ACartographModSubsystem::ClientUpdateBuildingData_Implementation(const TArr
 
     CARTO_LOG_DEBUG("Received Update Data");
 
+    if (!GameInstanceModule)
+    {
+        UGameInstanceModule* Module = GetWorld()->GetGameInstance()->GetSubsystem<UGameInstanceModuleManager>()->FindModule("Cartograph");
+        GameInstanceModule = Cast<UCartographGameInstanceModule>(Module);
+    }
+    CARTO_LOG_ERROR_RETURN_IF_NULL(GameInstanceModule);
+
     GameInstanceModule->PendingAddBuildingData.Append(AddedBuildings);
     GameInstanceModule->PendingRemoveBuildingData.Append(RemovedBuildings);
 
