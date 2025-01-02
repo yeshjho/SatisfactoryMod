@@ -32,7 +32,7 @@ struct FMenuItem
     GENERATED_BODY()
 
     UPROPERTY(BlueprintReadWrite)
-    FText DisplayName;
+    FString DisplayName;
 
     UPROPERTY(BlueprintReadWrite)
     UCartographMenuItemWidget* Widget;
@@ -45,7 +45,7 @@ struct FSubCategoryItem
     GENERATED_BODY()
 
     UPROPERTY(BlueprintReadWrite)
-    FText DisplayName;
+    FString DisplayName;
 
     UPROPERTY(BlueprintReadWrite)
     TMap<FName, FMenuItem> Items;
@@ -84,6 +84,7 @@ class CARTOGRAPH_API UCartographMenuWidget : public UUserWidget
 	GENERATED_BODY()
 
 public:
+    const TMap<FName, FHeadingItem>& GetMenuItemHierarchy() const { return MenuItemHierarchy; }
 
 
 private:
@@ -95,6 +96,9 @@ private:
 
     UFUNCTION(BlueprintCallable)
     void PostInitialize();
+
+    UFUNCTION(BlueprintCallable)
+    void UpdateVisibilities(FText SearchText);
 
 
 protected:

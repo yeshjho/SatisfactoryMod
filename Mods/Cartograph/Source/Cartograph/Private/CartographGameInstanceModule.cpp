@@ -1019,68 +1019,6 @@ void UCartographGameInstanceModule::OnLayerConfigChanged()
 }
 
 
-void UCartographGameInstanceModule::FillBuildLayerDataCache()
-{
-	if (!BuildLayerDataMapCache.IsEmpty())
-	{
-		return;
-	}
-
-	const AFGRecipeManager* RecipeManager = AFGRecipeManager::Get(GetWorld());
-    CARTO_LOG_ERROR_RETURN_IF_NULL(RecipeManager);
-	for (const auto& [OriginalBuildableClass, _] : ClassPtrToClassIDMap)
-	{
-		if (!OriginalBuildableClass)
-		{
-			continue;
-		}
-
-		const TSoftClassPtr<AFGBuildable>* RedirectClass = BuildableClassRedirectMap.Find(OriginalBuildableClass.Get());
-		const TSubclassOf<AFGBuildable> BuildableClass = RedirectClass ? RedirectClass->LoadSynchronous() : OriginalBuildableClass.Get();
-
-		const uint32* BuildableClassHash = ClassPtrToClassIDMap.Find(BuildableClass);
-		if (!BuildableClassHash)
-		{
-			UE_LOG(LogCartograph, Error, TEXT("Can't find hash for %s"), *BuildableClass->GetName());
-			continue;
-		}
-
-		const FBuildLayerData* LayerData = BuildableBuildLayerDataOverrideMap.Find(BuildableClass.Get());
-		if (!LayerData)
-		{
-			const TSubclassOf<UFGBuildingDescriptor> Descriptor = RecipeManager->FindBuildingDescriptorByClass(BuildableClass);
-			if (!Descriptor)
-			{
-				UE_LOG(LogCartograph, Warning, TEXT("Can't find descriptor for %s"), *BuildableClass->GetName());
-				continue;
-			}
-
-			if (TArray<TSubclassOf<UFGCategory>> Subcategories = UFGItemDescriptor::GetSubCategoriesOfClass(Descriptor, UFGBuildSubCategory::StaticClass());
-				!Subcategories.IsEmpty())
-			{
-				LayerData = BuildLayerDataMap.Find(Subcategories[0].Get());
-			}
-			if (!LayerData)
-			{
-				const TSubclassOf<UFGBuildCategory> Category = UFGBuildingDescriptor::GetBuildCategory(Descriptor);
-				LayerData = BuildLayerDataMap.Find(Category.Get());
-			}
-		}
-
-		if (LayerData->MainCategoryCache.IsNone())
-		{
-			TArray<FString> CategoryNames;
-			LayerData->Category.ParseIntoArray(CategoryNames, TEXT("/"));
-
-			const_cast<FBuildLayerData*>(LayerData)->MainCategoryCache = FName{ CategoryNames[0] };
-			const_cast<FBuildLayerData*>(LayerData)->SubCategoryCache = CategoryNames.Num() > 1 ? FName{ CategoryNames[1] } : NAME_None;
-		}
-
-		BuildLayerDataMapCache.Add(*BuildableClassHash, LayerData);
-	}
-}
-
-
 const FBuildLayerData* UCartographGameInstanceModule::GetBuildLayerData(uint32 ClassHash)
 {
 	FillBuildLayerDataCache();
@@ -1090,6 +1028,12 @@ const FBuildLayerData* UCartographGameInstanceModule::GetBuildLayerData(uint32 C
         return *DataCache;
     }
 	return nullptr;
+}
+
+
+bool UCartographGameInstanceModule::DoesBuildingExist(uint32 ClassHash) const
+{
+	return BuildingCountMap.FindRef(ClassHash) > 0;
 }
 
 
@@ -1126,6 +1070,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
 
 	const int Total = Factories.Num() + BuildingCount;
 	CurrentBuildingData.Empty(Total);
+    BuildingCountMap.Empty();
 
 	const float TimeBudget = FCartograph_ConfigStruct::GetActiveConfig(GetWorld()).InitializeTimeBudget;
 	UE5Coro::Latent::FTickTimeBudget Budget = UE5Coro::Latent::FTickTimeBudget::Milliseconds(TimeBudget);
@@ -1148,6 +1093,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
 
 		const int32 Pos = Algo::LowerBound(CurrentBuildingData, NewBuildingData);
 		CurrentBuildingData.Insert(std::move(NewBuildingData), Pos);
+        BuildingCountMap.FindOrAdd(NewBuildingData.BuildableClassHash)++;
 
         InitializeProgress = static_cast<float>(++Processed) / Total;
 		co_await Budget;
@@ -1165,6 +1111,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
 
 			const int32 Pos = Algo::LowerBound(CurrentBuildingData, NewBuildingData);
 			CurrentBuildingData.Insert(std::move(NewBuildingData), Pos);
+            BuildingCountMap.FindOrAdd(NewBuildingData.BuildableClassHash)++;
 
 			InitializeProgress = static_cast<float>(++Processed) / Total;
 			co_await Budget;
@@ -1176,6 +1123,11 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
 	OnZFilterUpdated(0, 1);
 
 	CARTO_LOG_DEBUG("InitialBuildableGather Finished");
+
+	for (const auto& [ClassHash, Count] : BuildingCountMap)
+	{
+        CARTO_LOG_DEBUG("Building: %u, Count: %d", ClassHash, Count);
+	}
 
 	IsInitializing = false;
 	IsPendingRedraw = false;
@@ -1206,6 +1158,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 
 			const int32 Pos = Algo::LowerBound(CurrentBuildingData, AddedBuildingData);
 			CurrentBuildingData.Insert(std::move(AddedBuildingData), Pos);
+            BuildingCountMap.FindOrAdd(AddedBuildingData.BuildableClassHash)++;
 
 			co_await Budget;
 		}
@@ -1221,7 +1174,8 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 	        {
 	            if (RemovedBuildingData == CurrentBuildingData[i])
 	            {
-					CurrentBuildingData.RemoveAt(i);
+                    CurrentBuildingData.RemoveAt(i);
+                    BuildingCountMap.FindChecked(RemovedBuildingData.BuildableClassHash)--;
 	                break;
 	            }
                 if (RemovedBuildingData > CurrentBuildingData[i])
@@ -1644,6 +1598,68 @@ void UCartographGameInstanceModule::SaveRuntimeConfig()
         }
         BuildingStringProperty->Value = Builder.ToString();
         BuildingStringProperty->MarkDirty();
+	}
+}
+
+
+void UCartographGameInstanceModule::FillBuildLayerDataCache()
+{
+	if (!BuildLayerDataMapCache.IsEmpty())
+	{
+		return;
+	}
+
+	const AFGRecipeManager* RecipeManager = AFGRecipeManager::Get(GetWorld());
+	CARTO_LOG_ERROR_RETURN_IF_NULL(RecipeManager);
+	for (const auto& [OriginalBuildableClass, _] : ClassPtrToClassIDMap)
+	{
+		if (!OriginalBuildableClass)
+		{
+			continue;
+		}
+
+		const TSoftClassPtr<AFGBuildable>* RedirectClass = BuildableClassRedirectMap.Find(OriginalBuildableClass.Get());
+		const TSubclassOf<AFGBuildable> BuildableClass = RedirectClass ? RedirectClass->LoadSynchronous() : OriginalBuildableClass.Get();
+
+		const uint32* BuildableClassHash = ClassPtrToClassIDMap.Find(BuildableClass);
+		if (!BuildableClassHash)
+		{
+			UE_LOG(LogCartograph, Error, TEXT("Can't find hash for %s"), *BuildableClass->GetName());
+			continue;
+		}
+
+		const FBuildLayerData* LayerData = BuildableBuildLayerDataOverrideMap.Find(BuildableClass.Get());
+		if (!LayerData)
+		{
+			const TSubclassOf<UFGBuildingDescriptor> Descriptor = RecipeManager->FindBuildingDescriptorByClass(BuildableClass);
+			if (!Descriptor)
+			{
+				UE_LOG(LogCartograph, Warning, TEXT("Can't find descriptor for %s"), *BuildableClass->GetName());
+				continue;
+			}
+
+			if (TArray<TSubclassOf<UFGCategory>> Subcategories = UFGItemDescriptor::GetSubCategoriesOfClass(Descriptor, UFGBuildSubCategory::StaticClass());
+				!Subcategories.IsEmpty())
+			{
+				LayerData = BuildLayerDataMap.Find(Subcategories[0].Get());
+			}
+			if (!LayerData)
+			{
+				const TSubclassOf<UFGBuildCategory> Category = UFGBuildingDescriptor::GetBuildCategory(Descriptor);
+				LayerData = BuildLayerDataMap.Find(Category.Get());
+			}
+		}
+
+		if (LayerData->MainCategoryCache.IsNone())
+		{
+			TArray<FString> CategoryNames;
+			LayerData->Category.ParseIntoArray(CategoryNames, TEXT("/"));
+
+			const_cast<FBuildLayerData*>(LayerData)->MainCategoryCache = FName{ CategoryNames[0] };
+			const_cast<FBuildLayerData*>(LayerData)->SubCategoryCache = CategoryNames.Num() > 1 ? FName{ CategoryNames[1] } : NAME_None;
+		}
+
+		BuildLayerDataMapCache.Add(*BuildableClassHash, LayerData);
 	}
 }
 

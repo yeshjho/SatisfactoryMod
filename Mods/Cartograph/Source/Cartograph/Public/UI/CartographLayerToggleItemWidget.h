@@ -6,6 +6,7 @@
 
 
 class UCartographGameInstanceModule;
+class UCartographMenuWidget;
 
 
 /**
@@ -17,7 +18,7 @@ class CARTOGRAPH_API UCartographLayerToggleItemWidget : public UCartographMenuIt
 	GENERATED_BODY()
 
 public:
-    void Initialize_Native(const FName& MainCategory, const FName& SubCategory);
+    void Initialize_Native(UCartographMenuWidget* MenuWidget, const FName& MainCategory, const FName& SubCategory);
 
 private:
     UFUNCTION(BlueprintCallable)
@@ -41,4 +42,7 @@ protected:
 
     UPROPERTY(BlueprintReadWrite)
     FName SubCategory;
+
+    UPROPERTY(BlueprintReadWrite)
+    UCartographMenuWidget* MenuWidget;
 };

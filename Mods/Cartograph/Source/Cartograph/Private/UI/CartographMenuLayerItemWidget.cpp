@@ -15,6 +15,12 @@ void UCartographMenuLayerItemWidget::Initialize_Native(const FName& LayerCategor
 }
 
 
+bool UCartographMenuLayerItemWidget::ShouldBeVisible() const
+{
+    return GameInstanceModule->DoesBuildingExist(ClassHash);
+}
+
+
 void UCartographMenuLayerItemWidget::OnClicked(bool IsChecked) const
 {
     if (!IsChecked)

@@ -21,7 +21,7 @@ void UCartographMenuWidget::InitializeHeadings(UPanelWidget* Panel)
         CategoryWidget->Initialize(ECategoryType::Heading, DisplayName);
         Panel->AddChild(CategoryWidget);
         MenuItemHierarchy.Add(Name, FHeadingItem{ 
-            DisplayName,
+            DisplayName.ToString(),
 			{},
             CategoryWidget,
         });
@@ -42,10 +42,10 @@ void UCartographMenuWidget::InitializeLayers()
         CategoryWidget->Initialize(ECategoryType::MainCategory, CategoryData.DisplayName);
         LayerHeading.CategoryWidget->AddCategory(CategoryWidget);
         auto* ToggleItemWidget = CreateWidget<UCartographLayerToggleItemWidget>(this, CategoryLayerToggleItemWidgetType);
-        ToggleItemWidget->Initialize_Native(CategoryData.Name, FName{});
+        ToggleItemWidget->Initialize_Native(this, CategoryData.Name, FName{});
         CategoryWidget->AddItem(ToggleItemWidget, true);
         FMainCategoryItem MainCategoryItem{
-            CategoryData.DisplayName,
+            CategoryData.DisplayName.ToString(),
 			{},
             CategoryWidget,
         };
@@ -56,10 +56,10 @@ void UCartographMenuWidget::InitializeLayers()
             SubCategoryWidget->Initialize(ECategoryType::SubCategory, SubCategoryData.DisplayName);
             CategoryWidget->AddCategory(SubCategoryWidget);
             auto* ToggleItemWidgetSub= CreateWidget<UCartographLayerToggleItemWidget>(this, CategoryLayerToggleItemWidgetType);
-            ToggleItemWidgetSub->Initialize_Native(CategoryData.Name, SubCategoryData.Name);
+            ToggleItemWidgetSub->Initialize_Native(this, CategoryData.Name, SubCategoryData.Name);
             SubCategoryWidget->AddItem(ToggleItemWidgetSub, true);
             MainCategoryItem.SubCategories.Add(SubCategoryData.Name, FSubCategoryItem{
-                .DisplayName = SubCategoryData.DisplayName,
+                .DisplayName = SubCategoryData.DisplayName.ToString(),
                 .CategoryWidget = SubCategoryWidget,
             });
         }
@@ -68,16 +68,19 @@ void UCartographMenuWidget::InitializeLayers()
     }
 
     const AFGRecipeManager* RecipeManager = AFGRecipeManager::Get(UCartographGameInstanceModule::Instance->GetWorld());
-    for (const auto& [OriginalBuildableClass, _] : UCartographGameInstanceModule::Instance->ClassPtrToClassIDMap)
+    CARTO_LOG_ERROR_RETURN_IF_NULL(RecipeManager);
+    const auto& BuildableClassRedirectMap = UCartographGameInstanceModule::Instance->BuildableClassRedirectMap;
+    for (const auto& [BuildableClass, _] : UCartographGameInstanceModule::Instance->ClassPtrToClassIDMap)
     {
-	    if (!OriginalBuildableClass)
+	    if (!BuildableClass)
 	    {
             continue;
 	    }
 
-        const auto& BuildableClassRedirectMap = UCartographGameInstanceModule::Instance->BuildableClassRedirectMap;
-        const TSoftClassPtr<AFGBuildable>* RedirectClass = BuildableClassRedirectMap.Find(OriginalBuildableClass.Get());
-        const TSubclassOf<AFGBuildable> BuildableClass = RedirectClass ? RedirectClass->LoadSynchronous() : OriginalBuildableClass.Get();
+        if (BuildableClassRedirectMap.Contains(BuildableClass.Get()))
+	    {
+		    continue;
+	    }
 
         const uint32* ClassHash = UCartographGameInstanceModule::Instance->ClassPtrToClassIDMap.Find(BuildableClass);
         if (!ClassHash)
@@ -114,7 +117,7 @@ void UCartographMenuWidget::InitializeLayers()
             auto* ItemWidget = CreateWidget<UCartographMenuLayerItemWidget>(this, CategoryLayerItemWidgetType);
             ItemWidget->Initialize_Native(LayerData->MainCategoryCache, NAME_None, *ClassHash, Icon, BuildingName);
             MainCategoryItem->CategoryWidget->AddItem(ItemWidget, false);
-            MainCategoryItem->Items.Add(NAME_None, FMenuItem{ BuildingName , ItemWidget });
+            MainCategoryItem->Items.Add(FName{ FString::FromInt(*ClassHash) }, FMenuItem{ BuildingName.ToString(), ItemWidget });
         }
         else
         {
@@ -128,7 +131,7 @@ void UCartographMenuWidget::InitializeLayers()
             auto* ItemWidget = CreateWidget<UCartographMenuLayerItemWidget>(this, CategoryLayerItemWidgetType);
             ItemWidget->Initialize_Native(LayerData->MainCategoryCache, LayerData->SubCategoryCache, *ClassHash, Icon, BuildingName);
             SubCategoryItem->CategoryWidget->AddItem(ItemWidget, false);
-            SubCategoryItem->Items.Add(NAME_None, FMenuItem{ BuildingName , ItemWidget });
+            SubCategoryItem->Items.Add(FName{ FString::FromInt(*ClassHash) }, FMenuItem{ BuildingName.ToString(), ItemWidget });
         }
     }
 }
@@ -147,5 +150,45 @@ void UCartographMenuWidget::PostInitialize()
                 SubCategoryItem.CategoryWidget->PostInitialize();
             }
         }
+    }
+}
+
+
+void UCartographMenuWidget::UpdateVisibilities(FText SearchText)
+{
+    const bool IsSearchTextEmpty = SearchText.IsEmptyOrWhitespace();
+    const FString SearchString = SearchText.ToString();
+
+    for (const auto& [_, HeadingItem] : MenuItemHierarchy)
+    {
+        const bool DoesHeadingMatch = !IsSearchTextEmpty && HeadingItem.DisplayName.Contains(SearchString);
+        bool ShouldHeadingVisible = false;
+        for (const auto& [_, MainCategoryItem] : HeadingItem.MainCategories)
+        {
+            const bool DoesMainCategoryMatch = !IsSearchTextEmpty && MainCategoryItem.DisplayName.Contains(SearchString);
+            bool ShouldMainCategoryVisible = false;
+            for (const auto& [_, SubCategoryItem] : MainCategoryItem.SubCategories)
+            {
+                const bool DoesSubCategoryMatch = !IsSearchTextEmpty && SubCategoryItem.DisplayName.Contains(SearchString);
+                bool ShouldSubCategoryVisible = false;
+                for (const auto& [_, Item] : SubCategoryItem.Items)
+                {
+                    const bool ShouldBeVisible = 
+                        (IsSearchTextEmpty || DoesHeadingMatch || DoesMainCategoryMatch || DoesSubCategoryMatch || Item.DisplayName.Contains(SearchString)) &&
+                        Item.Widget->ShouldBeVisible();
+
+                    Item.Widget->SetVisibility(ShouldBeVisible ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+                    ShouldSubCategoryVisible |= ShouldBeVisible;
+                }
+
+                SubCategoryItem.CategoryWidget->SetVisibility(ShouldSubCategoryVisible ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+            	ShouldMainCategoryVisible |= ShouldSubCategoryVisible;
+            }
+
+            MainCategoryItem.CategoryWidget->SetVisibility(ShouldMainCategoryVisible ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+            ShouldHeadingVisible |= ShouldMainCategoryVisible;
+        }
+
+        HeadingItem.CategoryWidget->SetVisibility(ShouldHeadingVisible ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
     }
 }

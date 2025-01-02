@@ -3,8 +3,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: Cartograph\n"
-"POT-Creation-Date: 2025-01-02 03:51\n"
-"PO-Revision-Date: 2025-01-02 03:51\n"
+"POT-Creation-Date: 2025-01-02 11:31\n"
+"PO-Revision-Date: 2025-01-02 11:31\n"
 "Language-Team: \n"
 "Language: ko\n"
 "MIME-Version: 1.0\n"
@@ -24,7 +24,7 @@ msgstr "Cartograph: 초기화 중..."
 #: /Cartograph/UI/Menu/BPW_CartographMenu.BPW_CartographMenu_C:WidgetTree.TextBlock_166.Text
 msgctxt ",39619DFE45EB8B601D6BA8B457CCFBE9"
 msgid "Show Buildings on Map"
-msgstr "지도에 건물 표시"
+msgstr "지도에 건물 표시하기"
 
 #. Key:	B3A93293446748BDB7FFEDBC87F27D9D
 #. SourceLocation:	/Cartograph/UI/Menu/BPW_CartographMenu.Default__BPW_CartographMenu_C.HeadingData(0).HeadingData.DisplayName

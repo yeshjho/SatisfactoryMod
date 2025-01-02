@@ -22,6 +22,10 @@ public:
     UFUNCTION(BlueprintImplementableEvent)
     void Initialize(UTexture2D* Icon);
 
+    virtual bool ShouldBeVisible() const override;
+
+    uint32 GetClassHash() const { return ClassHash; }
+
 
 private:
     UFUNCTION(BlueprintCallable)

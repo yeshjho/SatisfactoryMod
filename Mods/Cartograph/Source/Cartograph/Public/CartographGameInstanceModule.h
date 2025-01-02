@@ -254,8 +254,9 @@ public:
 
 	void OnLayerConfigChanged();
 
-	void FillBuildLayerDataCache();
 	const FBuildLayerData* GetBuildLayerData(uint32 ClassHash);
+
+	bool DoesBuildingExist(uint32 ClassHash) const;
 
 private:
 	void RedrawMap();
@@ -272,6 +273,8 @@ private:
 
 	void LoadRuntimeConfig();
     void SaveRuntimeConfig();
+
+	void FillBuildLayerDataCache();
 
 #if WITH_EDITOR
 	virtual void PostCDOContruct() override;
@@ -299,8 +302,6 @@ public:
 	inline static UCartographGameInstanceModule* Instance = nullptr;
 
 	FRuntimeConfig RuntimeConfig;
-
-	TMap<uint32, const FBuildLayerData*> BuildLayerDataMapCache;
 
 
 	// Made it editable since it doesn't get cleared properly sometimes.
@@ -365,6 +366,10 @@ protected:
 
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UUserWidget> MenuWidget;
+
+
+	TMap<uint32, const FBuildLayerData*> BuildLayerDataMapCache;
+	TMap<uint32, uint32> BuildingCountMap;
 
 
 	bool ShouldInitialize = false;

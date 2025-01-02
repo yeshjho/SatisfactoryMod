@@ -1,10 +1,13 @@
 #include "UI/CartographLayerToggleItemWidget.h"
 
 #include "CartographGameInstanceModule.h"
+#include "CartographMenuLayerItemWidget.h"
+#include "CartographMenuWidget.h"
 
 
-void UCartographLayerToggleItemWidget::Initialize_Native(const FName& MainCategory, const FName& SubCategory)
+void UCartographLayerToggleItemWidget::Initialize_Native(UCartographMenuWidget* MenuWidget, const FName& MainCategory, const FName& SubCategory)
 {
+    this->MenuWidget = MenuWidget;
     this->MainCategory = MainCategory;
     this->SubCategory = SubCategory;
 }
@@ -58,45 +61,50 @@ bool UCartographLayerToggleItemWidget::GetInitialStatus() const
 
 void UCartographLayerToggleItemWidget::SelectOrDeselectAll(bool DoSelect)
 {
-    GameInstanceModule->FillBuildLayerDataCache();
+    const auto LambdaProcessItems = [this, DoSelect](const TMap<FName, FMenuItem>& Items)
+        {
+            for (const auto& [_, MenuItem] : Items)
+            {
+                const auto* LayerItemWidget = Cast<UCartographMenuLayerItemWidget>(MenuItem.Widget);
+                CARTO_LOG_ERROR_RETURN_IF_NULL(LayerItemWidget);
+
+                if (LayerItemWidget->GetVisibility() == ESlateVisibility::Collapsed)
+                {
+                    continue;
+                }
+
+                if (DoSelect)
+                {
+                    GameInstanceModule->RuntimeConfig.DisabledLayerBuildable.Remove(LayerItemWidget->GetClassHash());
+                }
+                else
+                {
+                    GameInstanceModule->RuntimeConfig.DisabledLayerBuildable.Add(LayerItemWidget->GetClassHash());
+                }
+            }
+        };
+
+    const FHeadingItem* Layers = MenuWidget->GetMenuItemHierarchy().Find("Layers");
+    CARTO_LOG_ERROR_RETURN_IF_NULL(Layers);
+
+    const FMainCategoryItem* MainCategoryData = Layers->MainCategories.Find(MainCategory);
+    CARTO_LOG_ERROR_RETURN_IF_NULL(MainCategoryData);
 
     if (SubCategory.IsNone())
     {
-        for (const auto& [ClassHash, LayerData] : GameInstanceModule->BuildLayerDataMapCache)
-        {
-            if (LayerData->MainCategoryCache != MainCategory)
-            {
-                continue;
-            }
+        LambdaProcessItems(MainCategoryData->Items);
 
-            if (DoSelect)
-            {
-                GameInstanceModule->RuntimeConfig.DisabledLayerBuildable.Remove(ClassHash);
-            }
-            else
-            {
-                GameInstanceModule->RuntimeConfig.DisabledLayerBuildable.Add(ClassHash);
-            }
+        for (const auto& [_, SubCategoryData] : MainCategoryData->SubCategories)
+        {
+            LambdaProcessItems(SubCategoryData.Items);
         }
     }
     else
     {
-        for (const auto& [ClassHash, LayerData] : GameInstanceModule->BuildLayerDataMapCache)
-        {
-            if (LayerData->MainCategoryCache != MainCategory || LayerData->SubCategoryCache != SubCategory)
-            {
-                continue;
-            }
+        const FSubCategoryItem* SubCategoryData = MainCategoryData->SubCategories.Find(SubCategory);
+        CARTO_LOG_ERROR_RETURN_IF_NULL(SubCategoryData);
 
-            if (DoSelect)
-            {
-                GameInstanceModule->RuntimeConfig.DisabledLayerBuildable.Remove(ClassHash);
-            }
-            else
-            {
-                GameInstanceModule->RuntimeConfig.DisabledLayerBuildable.Add(ClassHash);
-            }
-        }
+        LambdaProcessItems(SubCategoryData->Items);
     }
     GameInstanceModule->OnLayerConfigChanged();
 }
