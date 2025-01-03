@@ -20,9 +20,11 @@ void UCartographMenuWidget::InitializeHeadings(UPanelWidget* Panel)
         CategoryWidget->Initialize(ECategoryType::Heading, DisplayName);
         Panel->AddChild(CategoryWidget);
         MenuItemHierarchy.Add(Name, FHeadingItem{ 
-            DisplayName.ToString(),
-			{},
-            CategoryWidget,
+            {
+            	DisplayName.ToString(),
+				{},
+	            CategoryWidget,
+            }
         });
     }
 }
@@ -44,9 +46,11 @@ void UCartographMenuWidget::InitializeLayers()
         ToggleItemWidget->Initialize_Native(this, CategoryData.Name, FName{});
         CategoryWidget->AddItem(ToggleItemWidget, true);
         FMainCategoryItem MainCategoryItem{
-            CategoryData.DisplayName.ToString(),
-			{},
-            CategoryWidget,
+            {
+                CategoryData.DisplayName.ToString(),
+                {},
+                CategoryWidget,
+            }
         };
 
         for (FLayerSubCategoryData& SubCategoryData : CategoryData.SubCategories)

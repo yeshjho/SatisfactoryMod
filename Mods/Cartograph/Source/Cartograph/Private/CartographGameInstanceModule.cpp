@@ -1489,6 +1489,7 @@ void UCartographGameInstanceModule::RegisterMenuButton() const
 
 void UCartographGameInstanceModule::LoadRuntimeConfig()
 {
+#if !UE_SERVER
 	const FCartograph_ConfigStruct ConfigInstance = FCartograph_ConfigStruct::GetActiveConfig(GetWorld());
 
 	RuntimeConfig = {};
@@ -1544,11 +1545,13 @@ void UCartographGameInstanceModule::LoadRuntimeConfig()
 	}
 
     CARTO_LOG("RuntimeConfig Loaded");
+#endif
 }
 
 
 void UCartographGameInstanceModule::SaveRuntimeConfig()
 {
+#if !UE_SERVER
 	const FConfigId ConfigId{ "Cartograph", "" };
 	const UConfigManager* ConfigManager = GetWorld()->GetGameInstance()->GetSubsystem<UConfigManager>();
 	const UConfigPropertySection* RootSection = ConfigManager->GetConfigurationRootSection(ConfigId);
@@ -1600,6 +1603,7 @@ void UCartographGameInstanceModule::SaveRuntimeConfig()
 	}
 
     CARTO_LOG("RuntimeConfig Saved");
+#endif
 }
 
 
