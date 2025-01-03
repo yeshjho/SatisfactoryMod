@@ -670,6 +670,7 @@ void UCartographGameInstanceModule::AfterSplineSegmentsModified()
 		BuildingData.CalculateSplinePoints();
 	}
 
+    CARTO_LOG("Spline segments modified");
 	RedrawMap();
 }
 #pragma endregion
@@ -692,6 +693,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 		break;
 	}
 
+    CARTO_LOG("UCartographGameInstanceModule Init")
 
 	Instance = this;
 
@@ -741,7 +743,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 	const auto LambdaAfterLoadGame =
 		[this](bool ReturnValue, UFGSaveSession* ClassInstance, const FString& SaveName)
 		{
-			CARTO_LOG_DEBUG("LoadGame");
+			CARTO_LOG("LoadGame");
 
 			IsClient = false;
 			ShouldInitialize = true;
@@ -891,6 +893,8 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 				return;
             }
 
+            CARTO_LOG("CloseRespawnUI");
+
 	        AFGPlayerController* PlayerController = Cast<AFGPlayerController>(GetWorld()->GetFirstPlayerController());
 			if (PlayerController->HasAuthority())
 			{
@@ -973,7 +977,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 
 void UCartographGameInstanceModule::OnWorldLoaded()
 {
-	CARTO_LOG_DEBUG("OnWorldLoaded");
+	CARTO_LOG("OnWorldLoaded");
 
     IsInWorld = true;
 	ShouldInitialize = true;
@@ -988,7 +992,7 @@ void UCartographGameInstanceModule::OnWorldLoaded()
 
 void UCartographGameInstanceModule::OnWorldUnloaded()
 {
-	CARTO_LOG_DEBUG("OnWorldUnloaded");
+	CARTO_LOG("OnWorldUnloaded");
 
 	IsInWorld = false;
 }
@@ -996,7 +1000,7 @@ void UCartographGameInstanceModule::OnWorldUnloaded()
 
 void UCartographGameInstanceModule::OnLayerConfigChanged()
 {
-    CARTO_LOG_DEBUG("OnLayerConfigChanged");
+    CARTO_LOG("OnLayerConfigChanged");
 
 	RedrawMap();
 	SaveRuntimeConfig();
@@ -1050,7 +1054,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
         BuildingCount += Arr.Num();
 	}
 
-    CARTO_LOG_DEBUG("InitialBuildableGather Started. Factories: %d, Buildings: %d", Factories.Num(), BuildingCount);
+    CARTO_LOG("InitialBuildableGather Started. Factories: %d, Buildings: %d", Factories.Num(), BuildingCount);
 
 	const int Total = Factories.Num() + BuildingCount;
 	CurrentBuildingData.Empty(Total);
@@ -1106,7 +1110,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
 	MaxHeight = !CurrentBuildingData.IsEmpty() ? CurrentBuildingData.Last().Transform.GetLocation().Z : 100;
 	OnZFilterUpdated(0, 1);
 
-	CARTO_LOG_DEBUG("InitialBuildableGather Finished");
+	CARTO_LOG("InitialBuildableGather Finished");
 
 	for (const auto& [ClassHash, Count] : BuildingCountMap)
 	{
@@ -1128,7 +1132,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
         OnCoroutineFinishedOrCancelled();
 	};
 
-	CARTO_LOG_DEBUG("RedrawMapCoroutine Started");
+	CARTO_LOG("RedrawMapCoroutine Started");
 
 	const float TimeBudget = FCartograph_ConfigStruct::GetActiveConfig(GetWorld()).RedrawTimeBudget;
 	UE5Coro::Latent::FTickTimeBudget Budget = UE5Coro::Latent::FTickTimeBudget::Milliseconds(TimeBudget);
@@ -1175,7 +1179,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
         MinHeight = !CurrentBuildingData.IsEmpty() ? CurrentBuildingData[0].Transform.GetLocation().Z : -100;
         MaxHeight = !CurrentBuildingData.IsEmpty() ? CurrentBuildingData.Last().Transform.GetLocation().Z : 100;
 
-        CARTO_LOG_DEBUG("Buildings Change Processed");
+        CARTO_LOG("Buildings Change Processed");
 	}
 
 	if (FPlatformProperties::IsServerOnly())
@@ -1347,7 +1351,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 		co_await Budget;
 	}
 
-	CARTO_LOG_DEBUG("RedrawMapCoroutine Finished");
+	CARTO_LOG("RedrawMapCoroutine Finished");
 }
 
 
@@ -1377,7 +1381,14 @@ void UCartographGameInstanceModule::ExecuteRedrawMapCoroutine()
 	Coroutine = RedrawMapCoroutine(PendingAddBuildingData, PendingRemoveBuildingData);
 	if (!IsClient)
 	{
-		ACartographModSubsystem::Instance->ClientUpdateBuildingData(PendingAddBuildingData, PendingRemoveBuildingData);
+		if (!ACartographModSubsystem::Instance)
+		{
+            CARTO_LOG_ERROR("ACartographModSubsystem is not initialized");
+		}
+		else
+		{
+			ACartographModSubsystem::Instance->ClientUpdateBuildingData(PendingAddBuildingData, PendingRemoveBuildingData);
+		}
 	}
 	PendingAddBuildingData.Empty();
 	PendingRemoveBuildingData.Empty();
@@ -1390,7 +1401,7 @@ void UCartographGameInstanceModule::OnZFilterUpdated(float Min, float Max)
 	MinZFilter = FMath::Floor(Min * Length + MinHeight);
 	MaxZFilter = FMath::CeilToInt(Max * Length + MinHeight);
 
-	CARTO_LOG_DEBUG("Min is now %f and max is now %f", MinZFilter, MaxZFilter);
+	CARTO_LOG("Min is now %f and max is now %f", MinZFilter, MaxZFilter);
 
 	if (!IsInitializing)
 	{
@@ -1471,6 +1482,8 @@ void UCartographGameInstanceModule::RegisterMenuButton() const
     CartographMenuPanelSlot->SetZOrder(MenuPanelSlot->GetZOrder());
 
 	CartographMenu->SetVisibility(ESlateVisibility::Collapsed);
+
+    CARTO_LOG("Menu Button Registered");
 }
 
 
@@ -1529,6 +1542,8 @@ void UCartographGameInstanceModule::LoadRuntimeConfig()
 			}
 		}
 	}
+
+    CARTO_LOG("RuntimeConfig Loaded");
 }
 
 
@@ -1583,6 +1598,8 @@ void UCartographGameInstanceModule::SaveRuntimeConfig()
         BuildingStringProperty->Value = Builder.ToString();
         BuildingStringProperty->MarkDirty();
 	}
+
+    CARTO_LOG("RuntimeConfig Saved");
 }
 
 
@@ -1630,7 +1647,7 @@ void UCartographGameInstanceModule::FillBuildLayerDataCache()
 		BuildLayerDataMapCache.Add(*BuildableClassHash, LayerData);
 	}
 
-    CARTO_LOG_DEBUG("BuildLayerDataCache Filled. Count: %d", BuildLayerDataMapCache.Num());
+    CARTO_LOG("BuildLayerDataCache Filled. Count: %d", BuildLayerDataMapCache.Num());
 }
 
 
@@ -1658,6 +1675,7 @@ void UCartographGameInstanceModule::OnCartographMenuButtonClicked(UUserWidget* W
 void UCartographGameInstanceModule::OnShowBuildingsCheckboxChanged(bool DoShow)
 {
     DoShowBuildings = DoShow;
+    CARTO_LOG("DoShowBuildings: %d", DoShowBuildings);
 }
 
 
@@ -1716,7 +1734,7 @@ void UCartographGameInstanceModule::PostCDOContruct()
 			const uint32 Hash = TextKeyUtil::HashString(AssetPath.ToString());
 			ClassPtrToClassIDMap.Add(Class, Hash);
 			ClassIDToClassPtrMap.Add(Hash, Class);
-			CARTO_LOG_DEBUG("Path: %s, Class: %s, Hash: %u", *AssetPath.ToString(), *Name, Hash);
+			CARTO_LOG("Path: %s, Class: %s, Hash: %u", *AssetPath.ToString(), *Name, Hash);
 		}
 	}
 	{
@@ -1756,7 +1774,7 @@ void UCartographGameInstanceModule::PostCDOContruct()
 			{
                 if (!SubCategory)
                 {
-                    CARTO_LOG_DEBUG("SubCategory is null: %s", *Name);
+                    CARTO_LOG("SubCategory is null: %s", *Name);
                     continue;
                 }
 
@@ -1779,7 +1797,8 @@ void UCartographGameInstanceModule::PostCDOContruct()
 				.SubCategory = BuildSubCategory,
 				.Icon = Icon,
             });
-            CARTO_LOG_DEBUG("Path: %s, Class: %s, BuildableClass: %s",
+			
+            CARTO_LOG("Path: %s, Class: %s, BuildableClass: %s",
 				*AssetPath.ToString(), 
 				*Name, 
 				*BuildableClass->GetName());

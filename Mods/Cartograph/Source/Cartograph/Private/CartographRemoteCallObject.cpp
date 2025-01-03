@@ -32,22 +32,17 @@ void UCartographRemoteCallObject::ServerRequestInitialBuildingData_Implementatio
 {
     constexpr float TimeOut = 10.f;
 
-    if (!GameInstanceModule)
-    {
-        UGameInstanceModule* Module = GetWorld()->GetGameInstance()->GetSubsystem<UGameInstanceModuleManager>()->FindModule("Cartograph");
-        GameInstanceModule = Cast<UCartographGameInstanceModule>(Module);
-    }
-
     switch (SendPhase)
     {
     case EInitialDataSendPhase::Initial:
     {
+        CARTO_LOG_ERROR_RETURN_IF_NULL(UCartographGameInstanceModule::Instance);
         // FBufferWriter doesn't handle moving properly, don't TakeOwnership and free manually. Amazing code quality XD
         // Another warning: FBufferWriter ignores FName
         FBufferWriter Archive{ nullptr, 0, EBufferWriterFlags::AllowResize };
         Archive.ArIsNetArchive = true;
-        Archive << GameInstanceModule->CurrentBuildingData;
-        CARTO_LOG_DEBUG("Initial Data Size: %d", Archive.TotalSize());
+        Archive << UCartographGameInstanceModule::Instance->CurrentBuildingData;
+        CARTO_LOG("Started Sending Initial Data: %d", Archive.TotalSize());
 
         InitialBuildingDataToSendPerPlayer.Add(PlayerController, FInitialBuildingDataToSend{
 	            .InitialBuildingData = std::move(Archive),
@@ -62,6 +57,7 @@ void UCartographRemoteCallObject::ServerRequestInitialBuildingData_Implementatio
 
     case EInitialDataSendPhase::Finished:
     {
+        CARTO_LOG("Finished Sending Initial Data");
 	    FInitialBuildingDataToSend& Data = *InitialBuildingDataToSendPerPlayer.Find(PlayerController);
         GetWorld()->GetTimerManager().ClearTimer(Data.TimerHandle);
         FMemory::Free(Data.InitialBuildingData.GetWriterData());
@@ -93,22 +89,17 @@ void UCartographRemoteCallObject::ServerRequestInitialBuildingData_Implementatio
 
 void UCartographRemoteCallObject::ClientReceiveInitialBuildingData_Implementation(const FBuildingDataBuffer& Array, int16 Size, int16 TotalSliceCount)
 {
-    if (!GameInstanceModule)
-    {
-        UGameInstanceModule* Module = GetWorld()->GetGameInstance()->GetSubsystem<UGameInstanceModuleManager>()->FindModule("Cartograph");
-        GameInstanceModule = Cast<UCartographGameInstanceModule>(Module);
-    }
-
     CARTO_LOG_DEBUG("Received Initial Data");
     Buffer.Append(Array.Data, Size);
 
+    CARTO_LOG_ERROR_RETURN_IF_NULL(UCartographGameInstanceModule::Instance);
     ReceivedSliceCount++;
-    GameInstanceModule->InitializeProgress = static_cast<float>(ReceivedSliceCount) / TotalSliceCount;
+    UCartographGameInstanceModule::Instance->InitializeProgress = static_cast<float>(ReceivedSliceCount) / TotalSliceCount;
 
     const bool IsLast = ReceivedSliceCount == TotalSliceCount;
     if (IsLast)
     {
-        CARTO_LOG_DEBUG("Was Last. Received %d.", Buffer.Num());
+        CARTO_LOG("Received Last Initial Data: %d.", Buffer.Num());
         InitialBuildableDeserialize();
     }
 
@@ -126,7 +117,7 @@ UE5Coro::TCoroutine<> UCartographRemoteCallObject::InitialBuildableDeserialize(F
     const float TimeBudget = FCartograph_ConfigStruct::GetActiveConfig(GetWorld()).RedrawTimeBudget;
     UE5Coro::Latent::FTickTimeBudget Budget = UE5Coro::Latent::FTickTimeBudget::Milliseconds(TimeBudget);
 
-    auto& A = GameInstanceModule->CurrentBuildingData;
+    auto& A = UCartographGameInstanceModule::Instance->CurrentBuildingData;
 
     /// Below is from `FArchive& TArrayPrivateFriend::Serialize(FArchive& Ar, TArray<ElementType, AllocatorType>& A)`
     A.CountBytes(Ar);
@@ -141,16 +132,18 @@ UE5Coro::TCoroutine<> UCartographRemoteCallObject::InitialBuildableDeserialize(F
     {
 	    FBuildingData& NewElement = A.AddDefaulted_GetRef();
         Ar << NewElement;
-        GameInstanceModule->BuildingCountMap.FindOrAdd(NewElement.BuildableClassHash)++;
+        UCartographGameInstanceModule::Instance->BuildingCountMap.FindOrAdd(NewElement.BuildableClassHash)++;
         co_await Budget;
     }
     /// End
 
-    for (const auto& [ClassHash, Count] : GameInstanceModule->BuildingCountMap)
+    for (const auto& [ClassHash, Count] : UCartographGameInstanceModule::Instance->BuildingCountMap)
     {
         CARTO_LOG_DEBUG("Building: %u, Count: %d", ClassHash, Count);
     }
+
+    CARTO_LOG("InitialBuildableDeserialize Finished");
     
-    GameInstanceModule->IsInitializing = false;
-    GameInstanceModule->RedrawMap();
+    UCartographGameInstanceModule::Instance->IsInitializing = false;
+    UCartographGameInstanceModule::Instance->RedrawMap();
 }

@@ -136,7 +136,7 @@ void UCartographMenuWidget::InitializeLayers()
         }
     }
 
-    CARTO_LOG_DEBUG("Initialized layers");
+    CARTO_LOG("Initialized layers");
 }
 
 

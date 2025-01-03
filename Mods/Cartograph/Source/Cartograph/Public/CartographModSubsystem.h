@@ -36,5 +36,4 @@ private:
 
 protected:
 	inline static ACartographModSubsystem* Instance = nullptr;
-    UCartographGameInstanceModule* GameInstanceModule = nullptr;
 };

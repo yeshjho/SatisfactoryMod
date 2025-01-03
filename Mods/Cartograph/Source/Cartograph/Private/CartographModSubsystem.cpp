@@ -1,7 +1,5 @@
 #include "CartographModSubsystem.h"
 
-#include "GameInstanceModuleManager.h"
-
 
 ACartographModSubsystem::ACartographModSubsystem()
 {
@@ -14,6 +12,8 @@ void ACartographModSubsystem::BeginDestroy()
 {
 	Super::BeginDestroy();
 
+    CARTO_LOG("CartographModSubsystem::BeginDestroy");
+
     Instance = nullptr;
 }
 
@@ -22,10 +22,7 @@ void ACartographModSubsystem::Init()
 {
 	Super::Init();
 
-    UGameInstanceModule* Module = GetWorld()->GetGameInstance()->GetSubsystem<UGameInstanceModuleManager>()->FindModule("Cartograph");
-    GameInstanceModule = Cast<UCartographGameInstanceModule>(Module);
-
-    CARTO_LOG_DEBUG("CartographModSubsystem::Init");
+    CARTO_LOG("CartographModSubsystem::Init");
 
     Instance = this;
 }
@@ -35,21 +32,15 @@ void ACartographModSubsystem::ClientUpdateBuildingData_Implementation(const TArr
 {
     if (HasAuthority())
     {
-        CARTO_LOG_DEBUG("Sending Update Data");
+        CARTO_LOG("Sending Update Data");
         return;
     }
 
-    CARTO_LOG_DEBUG("Received Update Data");
+    CARTO_LOG("Received Update Data");
 
-    if (!GameInstanceModule)
-    {
-        UGameInstanceModule* Module = GetWorld()->GetGameInstance()->GetSubsystem<UGameInstanceModuleManager>()->FindModule("Cartograph");
-        GameInstanceModule = Cast<UCartographGameInstanceModule>(Module);
-    }
-    CARTO_LOG_ERROR_RETURN_IF_NULL(GameInstanceModule);
+    CARTO_LOG_ERROR_RETURN_IF_NULL(UCartographGameInstanceModule::Instance);
+    UCartographGameInstanceModule::Instance->PendingAddBuildingData.Append(AddedBuildings);
+    UCartographGameInstanceModule::Instance->PendingRemoveBuildingData.Append(RemovedBuildings);
 
-    GameInstanceModule->PendingAddBuildingData.Append(AddedBuildings);
-    GameInstanceModule->PendingRemoveBuildingData.Append(RemovedBuildings);
-
-    GameInstanceModule->RedrawMap();
+    UCartographGameInstanceModule::Instance->RedrawMap();
 }

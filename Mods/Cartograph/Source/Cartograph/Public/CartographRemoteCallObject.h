@@ -90,6 +90,4 @@ protected:
 	// Client side
 	int16 ReceivedSliceCount = 0;
     TArray<uint8> Buffer;
-
-    UCartographGameInstanceModule* GameInstanceModule = nullptr;
 };

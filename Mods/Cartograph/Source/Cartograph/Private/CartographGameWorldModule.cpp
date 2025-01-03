@@ -1,7 +1,6 @@
 #include "CartographGameWorldModule.h"
 
 #include "CartographGameInstanceModule.h"
-#include "GameInstanceModuleManager.h"
 
 
 void UCartographGameWorldModule::DispatchLifecycleEvent(ELifecyclePhase Phase)
@@ -13,8 +12,10 @@ void UCartographGameWorldModule::DispatchLifecycleEvent(ELifecyclePhase Phase)
         return;
     }
 
-    UGameInstanceModule* Module = GetWorld()->GetGameInstance()->GetSubsystem<UGameInstanceModuleManager>()->FindModule("Cartograph");
-    Cast<UCartographGameInstanceModule>(Module)->OnWorldLoaded();
+    CARTO_LOG("UCartographGameWorldModule Init")
+
+    CARTO_LOG_ERROR_RETURN_IF_NULL(UCartographGameInstanceModule::Instance);
+    UCartographGameInstanceModule::Instance->OnWorldLoaded();
 }
 
 
@@ -22,14 +23,8 @@ void UCartographGameWorldModule::BeginDestroy()
 {
 	Super::BeginDestroy();
 
-    if (const UWorld* World = GetWorld())
-    {
-        if (const auto* ModuleManager = World->GetGameInstance()->GetSubsystem<UGameInstanceModuleManager>())
-        {
-            if (UGameInstanceModule* Module = ModuleManager->FindModule("Cartograph"))
-            {
-                Cast<UCartographGameInstanceModule>(Module)->OnWorldUnloaded();
-            }
-        }
-    }
+    CARTO_LOG("UCartographGameWorldModule Destroy")
+
+    CARTO_LOG_ERROR_RETURN_IF_NULL(UCartographGameInstanceModule::Instance);
+    UCartographGameInstanceModule::Instance->OnWorldUnloaded();
 }
