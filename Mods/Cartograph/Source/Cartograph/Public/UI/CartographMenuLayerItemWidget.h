@@ -17,10 +17,12 @@ class CARTOGRAPH_API UCartographMenuLayerItemWidget : public UCartographMenuItem
 	GENERATED_BODY()
 
 public:
-    void Initialize_Native(const FName& LayerCategory, const FName& LayerSubCategory, uint32 ClassHash, UTexture2D* Icon, const FText& BuildingName);
+    void Initialize_Native(const FName& InLayerCategory, const FName& InLayerSubCategory, uint32 InClassHash, UTexture2D* Icon, const FText& InBuildingName);
 
     UFUNCTION(BlueprintImplementableEvent)
     void Initialize(UTexture2D* Icon);
+
+    using Super::Initialize;  // Unhide
 
     virtual bool ShouldBeVisible() const override;
 

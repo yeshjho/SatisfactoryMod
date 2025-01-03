@@ -316,14 +316,14 @@ void FBuildingData::FillInCache(TSubclassOf<AFGBuildable> OriginalBuildableClass
 	const TSoftClassPtr<AFGBuildable>* RedirectClass = BuildableClassRedirectMap.Find(OriginalBuildableClass.Get());
 	const TSubclassOf<AFGBuildable> BuildableClass = RedirectClass ? RedirectClass->LoadSynchronous() : OriginalBuildableClass.Get();
 
-	const uint32* BuildableClassHash = UCartographGameInstanceModule::Instance->ClassPtrToClassIDMap.Find(BuildableClass);
-	if (!BuildableClassHash)
+	const uint32* ClassID = UCartographGameInstanceModule::Instance->ClassPtrToClassIDMap.Find(BuildableClass);
+	if (!ClassID)
 	{
 		UE_LOG(LogCartograph, Error, TEXT("Can't find hash for %s"), *BuildableClass->GetName());
 		return;
 	}
 
-	const FBuildLayerData* LayerData = UCartographGameInstanceModule::Instance->GetBuildLayerData(*BuildableClassHash);
+	const FBuildLayerData* LayerData = UCartographGameInstanceModule::Instance->GetBuildLayerData(*ClassID);
 	if (!LayerData)
 	{
 		return;
@@ -756,7 +756,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 
 #pragma region Hooking
 	const auto LambdaAfterLoadGame =
-		[this](bool ReturnValue, UFGSaveSession* Instance, const FString& SaveName)
+		[this](bool ReturnValue, UFGSaveSession* ClassInstance, const FString& SaveName)
 		{
 			CARTO_LOG_DEBUG("LoadGame");
 
@@ -764,7 +764,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 			ShouldInitialize = true;
             // Wait for ACartographModSubsystem to initialize
 			GetWorld()->GetTimerManager().SetTimerForNextTick(
-				[this, Instance]()
+				[this, ClassInstance]()
 				{
 					if (!ShouldInitialize)
 					{
@@ -775,18 +775,18 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 					IsInitializing = true;
 
 					TArray<TWeakObjectPtr<AFGBuildable>> Factories;
-					Algo::Transform(AFGBuildableSubsystem::Get(Instance)->GetAllBuildablesRef(), Factories,
+					Algo::Transform(AFGBuildableSubsystem::Get(ClassInstance)->GetAllBuildablesRef(), Factories,
 						[](AFGBuildable* Buildable) { return Buildable; });
 					Coroutine = InitialBuildableGather(
 						std::move(Factories),
-						AFGLightweightBuildableSubsystem::Get(Instance)->mBuildableClassToInstanceArray
+						AFGLightweightBuildableSubsystem::Get(ClassInstance)->mBuildableClassToInstanceArray
 					);
 				});
 		};
 
 
     const auto LambdaAfterAddFromBuildableInstanceData = 
-        [this](int32 ReturnValue, AFGLightweightBuildableSubsystem* Instance, TSubclassOf<AFGBuildable> BuildableClass, 
+        [this](int32 ReturnValue, AFGLightweightBuildableSubsystem* ClassInstance, TSubclassOf<AFGBuildable> BuildableClass,
             FRuntimeBuildableInstanceData& BuildableInstanceData, bool FromSaveData = false, int32 SaveDataBuildableIndex = INDEX_NONE, 
             uint16 ConstructId = MAX_uint16, AActor* BuildEffectInstigator = nullptr, int32 BlueprintBuildEffectIndex = INDEX_NONE)
         {
@@ -809,7 +809,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 
 
 	const auto LambdaAfterAddFromReplicatedData =
-		[this](AFGLightweightBuildableSubsystem* Instance, TSubclassOf<AFGBuildable> BuildableClass, TSubclassOf<UFGRecipe> BuiltWithRecipe, 
+		[this](AFGLightweightBuildableSubsystem* ClassInstance, TSubclassOf<AFGBuildable> BuildableClass, TSubclassOf<UFGRecipe> BuiltWithRecipe,
 			const FLightweightBuildableReplicationItem& ReplicationData, int32 MaxSize, 
 			AActor* BuildEffectInstigator, int32 BlueprintBuildIndex)
 		{
@@ -832,7 +832,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 
 
 	const auto LambdaAfterAddBuildable =
-		[this](AFGBuildableSubsystem* Instance, AFGBuildable* Buildable)
+		[this](AFGBuildableSubsystem* ClassInstance, AFGBuildable* Buildable)
 		{
 			CARTO_LOG_VERBOSE("AddBuildable: %s, Skip: %d", *Buildable->GetClass()->GetName(), ShouldInitialize || IsClient);
 
@@ -854,7 +854,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 
 
 	const auto LambdaAfterInvalidateRuntimeInstanceDataForIndex =
-		[this](AFGLightweightBuildableSubsystem* Instance, TSubclassOf<AFGBuildable> BuildableClass, int32 Index)
+		[this](AFGLightweightBuildableSubsystem* ClassInstance, TSubclassOf<AFGBuildable> BuildableClass, int32 Index)
 		{
 			CARTO_LOG_VERBOSE("InvalidateRuntimeInstanceDataForIndex: %s, Skip: %d", *BuildableClass->GetName(), ShouldInitialize || IsClient);
 
@@ -863,7 +863,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 				return;
 			}
 
-			const FRuntimeBuildableInstanceData* LightweightData = Instance->GetRuntimeDataForBuildableClassAndIndex(BuildableClass, Index);
+			const FRuntimeBuildableInstanceData* LightweightData = ClassInstance->GetRuntimeDataForBuildableClassAndIndex(BuildableClass, Index);
 
 			FBuildingData Data{
 					.Transform = LightweightData->Transform,
@@ -878,7 +878,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 
 
 	const auto LambdaAfterRemoveBuildable =
-		[this](AFGBuildableSubsystem* Instance, AFGBuildable* Buildable)
+		[this](AFGBuildableSubsystem* ClassInstance, AFGBuildable* Buildable)
 		{
 			CARTO_LOG_VERBOSE("RemoveBuildable: %s, Skip: %d", *Buildable->GetClass()->GetName(), ShouldInitialize || IsClient);
 
@@ -901,7 +901,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 
 
 	const auto LambdaAfterCloseRespawnUI =
-        [this](AFGHUD* Instance)
+        [this](AFGHUD* ClassInstance)
         {
             if (!ShouldInitialize)
             {

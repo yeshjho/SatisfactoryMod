@@ -18,7 +18,7 @@ class CARTOGRAPH_API UCartographLayerToggleItemWidget : public UCartographMenuIt
 	GENERATED_BODY()
 
 public:
-    void Initialize_Native(UCartographMenuWidget* MenuWidget, const FName& MainCategory, const FName& SubCategory);
+    void Initialize_Native(UCartographMenuWidget* InMenuWidget, const FName& InMainCategory, const FName& InSubCategory);
 
 private:
     UFUNCTION(BlueprintCallable)

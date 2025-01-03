@@ -3,13 +3,13 @@
 #include "CartographGameInstanceModule.h"
 
 
-void UCartographMenuLayerItemWidget::Initialize_Native(const FName& LayerCategory, const FName& LayerSubCategory,
-                                                       uint32 ClassHash, UTexture2D* Icon, const FText& BuildingName)
+void UCartographMenuLayerItemWidget::Initialize_Native(const FName& InLayerCategory, const FName& InLayerSubCategory,
+                                                       uint32 InClassHash, UTexture2D* Icon, const FText& InBuildingName)
 {
-    this->LayerCategory = LayerCategory;
-    this->LayerSubCategory = LayerSubCategory;
-    this->ClassHash = ClassHash;
-    this->BuildingName = BuildingName;
+    LayerCategory = InLayerCategory;
+    LayerSubCategory = InLayerSubCategory;
+    ClassHash = InClassHash;
+    BuildingName = InBuildingName;
 
     Initialize(Icon);
 }

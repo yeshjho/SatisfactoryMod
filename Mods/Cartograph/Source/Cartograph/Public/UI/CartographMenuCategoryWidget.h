@@ -26,6 +26,8 @@ public:
 	UFUNCTION(BlueprintImplementableEvent)
 	void Initialize(ECategoryType CategoryType, const FText& Text);
 
+	using Super::Initialize;  // Unhide
+
 	UFUNCTION(BlueprintImplementableEvent)
 	void PostInitialize();
 
@@ -37,9 +39,6 @@ public:
 	
 	UFUNCTION(BlueprintImplementableEvent)
 	void SetExpanded(bool DoExpand);
-
-
-	using UUserWidget::Initialize;  // Unhide
 
 
 private:

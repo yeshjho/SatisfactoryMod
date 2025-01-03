@@ -15,7 +15,7 @@
 void UCartographMenuWidget::InitializeHeadings(UPanelWidget* Panel)
 {
     Algo::SortBy(HeadingData, &FHeadingData::Priority);
-    for (const auto& [Name, DisplayName, Priority] : HeadingData)
+    for (const auto& [Name, DisplayName, _] : HeadingData)
     {
         auto* CategoryWidget = CreateWidget<UCartographMenuCategoryWidget>(this, CategoryWidgetType);
         CategoryWidget->Initialize(ECategoryType::Heading, DisplayName);
@@ -144,10 +144,10 @@ void UCartographMenuWidget::PostInitialize()
     for (const auto& [_, HeadingItem] : MenuItemHierarchy)
     {
         HeadingItem.CategoryWidget->PostInitialize();
-        for (const auto& [_, MainCategoryItem] : HeadingItem.MainCategories)
+        for (const auto& [__, MainCategoryItem] : HeadingItem.MainCategories)
         {
             MainCategoryItem.CategoryWidget->PostInitialize();
-            for (const auto& [_, SubCategoryItem] : MainCategoryItem.SubCategories)
+            for (const auto& [___, SubCategoryItem] : MainCategoryItem.SubCategories)
             {
                 SubCategoryItem.CategoryWidget->PostInitialize();
             }
@@ -167,15 +167,15 @@ void UCartographMenuWidget::UpdateVisibilities(FText SearchText)
     {
         const bool DoesHeadingMatch = !IsSearchTextEmpty && HeadingItem.DisplayName.Contains(SearchString);
         bool ShouldHeadingVisible = false;
-        for (const auto& [_, MainCategoryItem] : HeadingItem.MainCategories)
+        for (const auto& [__, MainCategoryItem] : HeadingItem.MainCategories)
         {
             const bool DoesMainCategoryMatch = !IsSearchTextEmpty && MainCategoryItem.DisplayName.Contains(SearchString);
             bool ShouldMainCategoryVisible = false;
-            for (const auto& [_, SubCategoryItem] : MainCategoryItem.SubCategories)
+            for (const auto& [___, SubCategoryItem] : MainCategoryItem.SubCategories)
             {
                 const bool DoesSubCategoryMatch = !IsSearchTextEmpty && SubCategoryItem.DisplayName.Contains(SearchString);
                 bool ShouldSubCategoryVisible = false;
-                for (const auto& [_, Item] : SubCategoryItem.Items)
+                for (const auto& [____, Item] : SubCategoryItem.Items)
                 {
                     const bool ShouldBeVisible = 
                         (IsSearchTextEmpty || DoesHeadingMatch || DoesMainCategoryMatch || DoesSubCategoryMatch || Item.DisplayName.Contains(SearchString)) &&

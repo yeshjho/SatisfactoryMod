@@ -5,11 +5,11 @@
 #include "CartographMenuWidget.h"
 
 
-void UCartographLayerToggleItemWidget::Initialize_Native(UCartographMenuWidget* MenuWidget, const FName& MainCategory, const FName& SubCategory)
+void UCartographLayerToggleItemWidget::Initialize_Native(UCartographMenuWidget* InMenuWidget, const FName& InMainCategory, const FName& InSubCategory)
 {
-    this->MenuWidget = MenuWidget;
-    this->MainCategory = MainCategory;
-    this->SubCategory = SubCategory;
+    MenuWidget = InMenuWidget;
+    MainCategory = InMainCategory;
+    SubCategory = InSubCategory;
 }
 
 
