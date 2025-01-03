@@ -82,7 +82,7 @@ void UCartographRemoteCallObject::ServerRequestInitialBuildingData_Implementatio
 
     GetWorld()->GetTimerManager().SetTimer(TimerHandle, [this, PlayerController]()
         {
-            UE_LOG(LogCartograph, Warning, TEXT("Initial Data Send Timed Out"));
+            CARTO_LOG_WARNING("Initial Data Send Timed Out");
 
             FInitialBuildingDataToSend& Data = *InitialBuildingDataToSendPerPlayer.Find(PlayerController);
             FMemory::Free(Data.InitialBuildingData.GetWriterData());

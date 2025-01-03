@@ -82,21 +82,21 @@ void UCartographMenuWidget::InitializeLayers()
         const uint32* ClassHash = UCartographGameInstanceModule::Instance->ClassPtrToClassIDMap.Find(BuildableClass);
         if (!ClassHash)
         {
-            UE_LOG(LogCartograph, Error, TEXT("Can't find hash for %s"), *BuildableClass->GetName());
+            CARTO_LOG_ERROR("Can't find hash for %s", *BuildableClass->GetName());
             continue;
         }
 
         const FBuildLayerData* LayerData = UCartographGameInstanceModule::Instance->GetBuildLayerData(*ClassHash);
         if (!LayerData)
         {
-            UE_LOG(LogCartograph, Warning, TEXT("Can't find layer data for %s"), *BuildableClass->GetName());
+            CARTO_LOG_WARNING("Can't find layer data for %s", *BuildableClass->GetName());
             continue;
         }
 
         const auto* DescriptorData = UCartographGameInstanceModule::Instance->ClassPtrToDescriptorDataMap.Find(BuildableClass);
         if (!DescriptorData)
         {
-            UE_LOG(LogCartograph, Warning, TEXT("Can't find descriptor data for %s"), *BuildableClass->GetName());
+            CARTO_LOG_WARNING("Can't find descriptor data for %s", *BuildableClass->GetName());
             continue;
         }
         UTexture2D* Icon = DescriptorData->Icon;
@@ -109,7 +109,7 @@ void UCartographMenuWidget::InitializeLayers()
         FMainCategoryItem* MainCategoryItem = LayerHeading.MainCategories.Find(LayerData->MainCategoryCache);
         if (!MainCategoryItem)
         {
-            UE_LOG(LogCartograph, Warning, TEXT("Can't find main category %s"), *LayerData->MainCategoryCache.ToString());
+            CARTO_LOG_WARNING("Can't find main category %s", *LayerData->MainCategoryCache.ToString());
             continue;
         }
 
@@ -125,7 +125,7 @@ void UCartographMenuWidget::InitializeLayers()
             FSubCategoryItem* SubCategoryItem = MainCategoryItem->SubCategories.Find(LayerData->SubCategoryCache);
             if (!SubCategoryItem)
             {
-                UE_LOG(LogCartograph, Warning, TEXT("Can't find sub category %s"), *LayerData->SubCategoryCache.ToString());
+                CARTO_LOG_WARNING("Can't find sub category %s", *LayerData->SubCategoryCache.ToString());
                 continue;
             }
 

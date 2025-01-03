@@ -296,7 +296,7 @@ bool FBuildingData::NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSucce
 		}
 		else
 		{
-			UE_LOG(LogCartograph, Warning, TEXT("Class ID %u not found in ClassIDToClassPtrMap"), BuildableClassHash);
+			CARTO_LOG_WARNING("Class ID %u not found in ClassIDToClassPtrMap", BuildableClassHash);
 		}
 	}
 
@@ -318,7 +318,7 @@ void FBuildingData::FillInCache(TSubclassOf<AFGBuildable> OriginalBuildableClass
 	const uint32* ClassID = UCartographGameInstanceModule::Instance->ClassPtrToClassIDMap.Find(BuildableClass);
 	if (!ClassID)
 	{
-		UE_LOG(LogCartograph, Error, TEXT("Can't find hash for %s"), *BuildableClass->GetName());
+		CARTO_LOG_ERROR("Can't find hash for %s", *BuildableClass->GetName());
 		return;
 	}
 
@@ -337,7 +337,7 @@ void FBuildingData::FillInCache(TSubclassOf<AFGBuildable> OriginalBuildableClass
 		const FSplineData* SplineData = BuildableSplineDataMap.Find(BuildableClass.Get());
 		if (!SplineData)
 		{
-			UE_LOG(LogCartograph, Warning, TEXT("Can't find spline data for %s"), *BuildableClass->GetName());
+			CARTO_LOG_WARNING("Can't find spline data for %s", *BuildableClass->GetName());
 			return;
 		}
 
@@ -349,7 +349,7 @@ void FBuildingData::FillInCache(TSubclassOf<AFGBuildable> OriginalBuildableClass
 		const FSplineExtraData* SplineExtraData = std::get_if<FSplineExtraData>(&BuildableExtraData);
 		if (!SplineExtraData)
 		{
-			UE_LOG(LogCartograph, Error, TEXT("Can't find spline extra data"));
+			CARTO_LOG_ERROR("Can't find spline extra data");
 			return;
 		}
 
@@ -374,7 +374,7 @@ void FBuildingData::FillInCache(TSubclassOf<AFGBuildable> OriginalBuildableClass
 		const FWireData* WireData = BuildableWireDataMap.Find(BuildableClass.Get());
 		if (!WireData)
 		{
-			UE_LOG(LogCartograph, Warning, TEXT("Can't find wire data for %s"), *BuildableClass->GetName());
+			CARTO_LOG_WARNING("Can't find wire data for %s", *BuildableClass->GetName());
 			return;
 		}
 
@@ -395,7 +395,7 @@ void FBuildingData::FillInCache(TSubclassOf<AFGBuildable> OriginalBuildableClass
 		const FWireData* BeamData = BuildableWireDataMap.Find(BuildableClass.Get());
 		if (!BeamData)
 		{
-			UE_LOG(LogCartograph, Warning, TEXT("Can't find beam data for %s"), *BuildableClass->GetName());
+			CARTO_LOG_WARNING("Can't find beam data for %s", *BuildableClass->GetName());
 			return;
 		}
 
@@ -417,7 +417,7 @@ void FBuildingData::FillInCache(TSubclassOf<AFGBuildable> OriginalBuildableClass
 		const FBox ClearanceBox = Cast<AFGBuildable>(BuildableClass->ClassDefaultObject)->GetCombinedClearanceBox();
 		if (!ClearanceBox.IsValid)
 		{
-			UE_LOG(LogCartograph, Warning, TEXT("Can't find size for %s"), *BuildableClass->GetName());
+			CARTO_LOG_WARNING("Can't find size for %s", *BuildableClass->GetName());
 			return;
 		}
 
@@ -460,7 +460,7 @@ void FBuildingData::FillInCache(TSubclassOf<AFGBuildable> OriginalBuildableClass
 		BuildableClass.Get());
 	if (!CategoryData)
 	{
-		UE_LOG(LogCartograph, Warning, TEXT("Can't find category data for %s"), *BuildableClass->GetName());
+		CARTO_LOG_WARNING("Can't find category data for %s", *BuildableClass->GetName());
 		return;
 	}
 
@@ -504,7 +504,7 @@ void FBuildingData::FillInHash(TSubclassOf<AFGBuildable> OriginalBuildableClass)
 	}
 	else
 	{
-		UE_LOG(LogCartograph, Warning, TEXT("Class %s not found in ClassPtrToClassIDMap"), *BuildableClass->GetName());
+		CARTO_LOG_WARNING("Class %s not found in ClassPtrToClassIDMap", *BuildableClass->GetName());
 	}
 }
 
@@ -534,7 +534,7 @@ void FBuildingData::CalculateSplinePoints()
 	const FSplineExtraData* SplineExtraData = std::get_if<FSplineExtraData>(&BuildableExtraData);
 	if (!SplineExtraData)
 	{
-		UE_LOG(LogCartograph, Error, TEXT("Can't find spline extra data"));
+		CARTO_LOG_ERROR("Can't find spline extra data");
 		return;
 	}
 
@@ -602,7 +602,7 @@ void UCartographGameInstanceModule::AddExtraData(FBuildingData& BuildingData, AF
 		if (const FSplineData* SplineData = BuildableSplineDataMap.Find(BuildableClass.Get());
 			!SplineData)
 		{
-			UE_LOG(LogCartograph, Warning, TEXT("Can't find spline data for %s"), *BuildableClass->GetName());
+			CARTO_LOG_WARNING("Can't find spline data for %s", *BuildableClass->GetName());
 		}
 		else if (SplineData->UseTangents)
 		{
@@ -654,7 +654,7 @@ void UCartographGameInstanceModule::AfterSplineSegmentsModified()
 		const FProperty* Property = FCartograph_ConfigStruct::StaticStruct()->FindPropertyByName(SplineData.SegmentsConfigName);
 		if (!Property)
 		{
-			UE_LOG(LogCartograph, Error, TEXT("SparsityConfigName not found: %s"), *SplineData.SegmentsConfigName.ToString());
+			CARTO_LOG_ERROR("SparsityConfigName not found: %s", *SplineData.SegmentsConfigName.ToString());
 			continue;
 		}
 		SplineData.SegmentsCached = *Property->ContainerPtrToValuePtr<int>(&ConfigInstance);
@@ -910,7 +910,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 			}
 			else
 			{
-                UE_LOG(LogCartograph, Error, TEXT("Failed to get RemoteCallObject"));
+                CARTO_LOG_ERROR("Failed to get RemoteCallObject");
 			}
         };
 
@@ -1164,7 +1164,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 	            }
                 if (RemovedBuildingData > CurrentBuildingData[i])
                 {
-                    UE_LOG(LogCartograph, Error, TEXT("Can't find removed building data"));
+                    CARTO_LOG_ERROR("Can't find removed building data");
                     break;
                 }
 	        }
@@ -1310,7 +1310,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 			const FWireExtraData* WireExtraData = std::get_if<FWireExtraData>(&BuildableExtraData);
 			if (!WireExtraData)
 			{
-				UE_LOG(LogCartograph, Error, TEXT("Can't find wire extra data"));
+				CARTO_LOG_ERROR("Can't find wire extra data");
 				continue;
 			}
 
@@ -1326,7 +1326,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 			const FBeamExtraData* BeamExtraData = std::get_if<FBeamExtraData>(&BuildableExtraData);
 			if (!BeamExtraData)
 			{
-				UE_LOG(LogCartograph, Error, TEXT("Can't find beam extra data"));
+				CARTO_LOG_ERROR("Can't find beam extra data");
 				continue;
 			}
 
@@ -1500,7 +1500,7 @@ void UCartographGameInstanceModule::LoadRuntimeConfig()
 			const size_t MainCategoryColonIndex = MainCategoryLine.find(':');
             if (MainCategoryColonIndex == std::wstring::npos)
             {
-                UE_LOG(LogCartograph, Error, TEXT("Invalid BuildingToggle: %s"), *ConfigInstance.BuildingToggle);
+                CARTO_LOG_ERROR("Invalid BuildingToggle: %s", *ConfigInstance.BuildingToggle);
                 break;
             }
             std::wstring MainCategoryName = MainCategoryLine.substr(0, MainCategoryColonIndex);
@@ -1606,7 +1606,7 @@ void UCartographGameInstanceModule::FillBuildLayerDataCache()
 		const uint32* BuildableClassHash = ClassPtrToClassIDMap.Find(BuildableClass);
 		if (!BuildableClassHash)
 		{
-			UE_LOG(LogCartograph, Error, TEXT("Can't find hash for %s"), *BuildableClass->GetName());
+			CARTO_LOG_ERROR("Can't find hash for %s", *BuildableClass->GetName());
 			continue;
 		}
 
@@ -1614,7 +1614,7 @@ void UCartographGameInstanceModule::FillBuildLayerDataCache()
         const FBuildLayerData* LayerData = GetDataByBuildableClass(BuildableBuildLayerDataOverrideMap, BuildLayerDataMap, BuildableClass);
 		if (!LayerData)
 		{
-            UE_LOG(LogCartograph, Warning, TEXT("Can't find layer data for %s"), *BuildableClass->GetName());
+            CARTO_LOG_WARNING("Can't find layer data for %s", *BuildableClass->GetName());
             continue;
 		}
 
