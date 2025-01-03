@@ -159,8 +159,6 @@ void UCartographMenuWidget::PostInitialize()
 
 void UCartographMenuWidget::UpdateVisibilities(FText SearchText)
 {
-    CARTO_LOG_DEBUG("UpdateVisibilities %s", *SearchText.ToString());
-
     const bool IsSearchTextEmpty = SearchText.IsEmptyOrWhitespace();
     const FString SearchString = SearchText.ToString();
 
@@ -182,7 +180,6 @@ void UCartographMenuWidget::UpdateVisibilities(FText SearchText)
                         (IsSearchTextEmpty || DoesHeadingMatch || DoesMainCategoryMatch || DoesSubCategoryMatch || Item.DisplayName.Contains(SearchString)) &&
                         Item.Widget->ShouldBeVisible();
 
-                    CARTO_LOG_DEBUG("Item %s %s", *Item.DisplayName, ShouldBeVisible ? TEXT("visible") : TEXT("hidden"));
                     Item.Widget->SetVisibility(ShouldBeVisible ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
                     ShouldSubCategoryVisible |= ShouldBeVisible;
                 }
