@@ -326,7 +326,6 @@ void FBuildingData::FillInCache(TSubclassOf<AFGBuildable> OriginalBuildableClass
 	const FBuildLayerData* LayerData = UCartographGameInstanceModule::Instance->GetBuildLayerData(*BuildableClassHash);
 	if (!LayerData)
 	{
-		UE_LOG(LogCartograph, Warning, TEXT("Can't find layer data for %s"), *BuildableClass->GetName());
 		return;
 	}
 	LayerDataCache = LayerData;
@@ -920,6 +919,8 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 			{
 				ShouldInitialize = false;
 				IsInitializing = true;
+				CurrentBuildingData.Empty();
+                BuildingCountMap.Empty();
 				RCO->ReceivedSliceCount = 0;
 				RCO->Buffer.Empty();
 				RCO->ServerRequestInitialBuildingData(PlayerController, EInitialDataSendPhase::Initial);
@@ -1180,7 +1181,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 	            }
                 if (RemovedBuildingData > CurrentBuildingData[i])
                 {
-                    UE_LOG(LogCartograph, Warning, TEXT("Can't find removed building data"));
+                    UE_LOG(LogCartograph, Error, TEXT("Can't find removed building data"));
                     break;
                 }
 	        }
@@ -1222,6 +1223,8 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 	{
         const auto& [ClassHash, Transform/*, CustomizationData*/, BuildableExtraData, DataType, DataCache, LayerDataCache] = CurrentBuildingData[i];
 
+		CARTO_LOG_VERY_VERBOSE("Buildable: %u, Transform: %s", ClassHash, *Transform.ToString());
+
 		if (RuntimeConfig.DisabledLayerBuildable.Contains(ClassHash))
 		{
             continue;
@@ -1240,8 +1243,6 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 				}
 			}
 		}
-
-		CARTO_LOG_VERY_VERBOSE("Buildable: %u, Transform: %s", ClassHash, *Transform.ToString());
 
 		switch (DataType)
 		{
@@ -1650,6 +1651,12 @@ void UCartographGameInstanceModule::FillBuildLayerDataCache()
 			}
 		}
 
+		if (!LayerData)
+		{
+            UE_LOG(LogCartograph, Warning, TEXT("Can't find layer data for %s"), *BuildableClass->GetName());
+            continue;
+		}
+
 		if (LayerData->MainCategoryCache.IsNone())
 		{
 			TArray<FString> CategoryNames;
@@ -1661,6 +1668,8 @@ void UCartographGameInstanceModule::FillBuildLayerDataCache()
 
 		BuildLayerDataMapCache.Add(*BuildableClassHash, LayerData);
 	}
+
+    CARTO_LOG_DEBUG("BuildLayerDataCache Filled. Count: %d", BuildLayerDataMapCache.Num());
 }
 
 

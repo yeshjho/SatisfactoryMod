@@ -139,10 +139,17 @@ UE5Coro::TCoroutine<> UCartographRemoteCallObject::InitialBuildableDeserialize(F
 
     for (int32 i = 0; i < SerializeNum; i++)
     {
-        Ar << A.AddDefaulted_GetRef();
+	    FBuildingData& NewElement = A.AddDefaulted_GetRef();
+        Ar << NewElement;
+        GameInstanceModule->BuildingCountMap.FindOrAdd(NewElement.BuildableClassHash)++;
         co_await Budget;
     }
     /// End
+
+    for (const auto& [ClassHash, Count] : GameInstanceModule->BuildingCountMap)
+    {
+        CARTO_LOG_DEBUG("Building: %u, Count: %d", ClassHash, Count);
+    }
     
     GameInstanceModule->IsInitializing = false;
     GameInstanceModule->RedrawMap();
