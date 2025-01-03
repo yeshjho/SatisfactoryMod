@@ -19,7 +19,6 @@
 #include "FGBuildCategory.h"
 #include "FGBuildSubCategory.h"
 #include "FGPlayerController.h"
-#include "FGRecipeManager.h"
 #include "FGSaveSession.h"
 #include "FGSplineBuildableInterface.h"
 
@@ -455,26 +454,10 @@ void FBuildingData::FillInCache(TSubclassOf<AFGBuildable> OriginalBuildableClass
 		return;
 	}
 
-
-	auto& BuildableBuildCategoryDataOverrideMap = UCartographGameInstanceModule::Instance->BuildableBuildCategoryDataOverrideMap;
-	const FCategoryData* CategoryData = BuildableBuildCategoryDataOverrideMap.Find(BuildableClass.Get());
-	if (!CategoryData)
-	{
-		const AFGRecipeManager* RecipeManager = AFGRecipeManager::Get(UCartographGameInstanceModule::Instance->GetWorld());
-		CARTO_LOG_ERROR_RETURN_IF_NULL(RecipeManager);
-		auto& BuildCategoryDataMap = UCartographGameInstanceModule::Instance->BuildCategoryDataMap;
-		const TSubclassOf<UFGBuildingDescriptor> Descriptor = RecipeManager->FindBuildingDescriptorByClass(BuildableClass);
-		if (TArray<TSubclassOf<UFGCategory>> Subcategories = UFGItemDescriptor::GetSubCategoriesOfClass(Descriptor, UFGBuildSubCategory::StaticClass());
-			!Subcategories.IsEmpty())
-		{
-			CategoryData = BuildCategoryDataMap.Find(Subcategories[0].Get());
-		}
-		if (!CategoryData)
-		{
-			const TSubclassOf<UFGBuildCategory> Category = UFGBuildingDescriptor::GetBuildCategory(Descriptor);
-			CategoryData = BuildCategoryDataMap.Find(Category.Get());
-		}
-	}
+	const FCategoryData* CategoryData = UCartographGameInstanceModule::Instance->GetDataByBuildableClass(
+		UCartographGameInstanceModule::Instance->BuildableBuildCategoryDataOverrideMap,
+		UCartographGameInstanceModule::Instance->BuildCategoryDataMap,
+		BuildableClass.Get());
 	if (!CategoryData)
 	{
 		UE_LOG(LogCartograph, Warning, TEXT("Can't find category data for %s"), *BuildableClass->GetName());
@@ -1610,8 +1593,6 @@ void UCartographGameInstanceModule::FillBuildLayerDataCache()
 		return;
 	}
 
-	const AFGRecipeManager* RecipeManager = AFGRecipeManager::Get(GetWorld());
-	CARTO_LOG_ERROR_RETURN_IF_NULL(RecipeManager);
 	for (const auto& [OriginalBuildableClass, _] : ClassPtrToClassIDMap)
 	{
 		if (!OriginalBuildableClass)
@@ -1629,28 +1610,8 @@ void UCartographGameInstanceModule::FillBuildLayerDataCache()
 			continue;
 		}
 
-		const FBuildLayerData* LayerData = BuildableBuildLayerDataOverrideMap.Find(BuildableClass.Get());
-		if (!LayerData)
-		{
-			const TSubclassOf<UFGBuildingDescriptor> Descriptor = RecipeManager->FindBuildingDescriptorByClass(BuildableClass);
-			if (!Descriptor)
-			{
-				UE_LOG(LogCartograph, Warning, TEXT("Can't find descriptor for %s"), *BuildableClass->GetName());
-				continue;
-			}
 
-			if (TArray<TSubclassOf<UFGCategory>> Subcategories = UFGItemDescriptor::GetSubCategoriesOfClass(Descriptor, UFGBuildSubCategory::StaticClass());
-				!Subcategories.IsEmpty())
-			{
-				LayerData = BuildLayerDataMap.Find(Subcategories[0].Get());
-			}
-			if (!LayerData)
-			{
-				const TSubclassOf<UFGBuildCategory> Category = UFGBuildingDescriptor::GetBuildCategory(Descriptor);
-				LayerData = BuildLayerDataMap.Find(Category.Get());
-			}
-		}
-
+        const FBuildLayerData* LayerData = GetDataByBuildableClass(BuildableBuildLayerDataOverrideMap, BuildLayerDataMap, BuildableClass);
 		if (!LayerData)
 		{
             UE_LOG(LogCartograph, Warning, TEXT("Can't find layer data for %s"), *BuildableClass->GetName());
@@ -1725,36 +1686,105 @@ void UCartographGameInstanceModule::PostCDOContruct()
 
     ClassIDToClassPtrMap.Empty();
     ClassPtrToClassIDMap.Empty();
+    ClassPtrToDescriptorDataMap.Empty();
 
-	TArray<UClass*> NativeRootClasses;
-	NativeRootClasses.Add(AFGBuildable::StaticClass());
-	GetDerivedClasses(AFGBuildable::StaticClass(), NativeRootClasses);
+	{
+		TArray<UClass*> NativeRootClasses;
+		NativeRootClasses.Add(AFGBuildable::StaticClass());
+		GetDerivedClasses(AFGBuildable::StaticClass(), NativeRootClasses);
 
-	TArray<FTopLevelAssetPath> NativeRootClassPaths;
+		TArray<FTopLevelAssetPath> NativeRootClassPaths;
 
-	Algo::TransformIf(NativeRootClasses, 
-		NativeRootClassPaths, 
-		[](const UClass* RootClass) { return RootClass && RootClass->HasAnyClassFlags(CLASS_Native); }, 
-		&UClass::GetClassPathName);
+		Algo::TransformIf(NativeRootClasses,
+			NativeRootClassPaths,
+			[](const UClass* RootClass) { return RootClass && RootClass->HasAnyClassFlags(CLASS_Native); },
+			&UClass::GetClassPathName);
 
-	TSet<FTopLevelAssetPath> AllClassPaths;
-	IAssetRegistry::Get()->GetDerivedClassNames(NativeRootClassPaths, {}, AllClassPaths);
+		TSet<FTopLevelAssetPath> AllClassPaths;
+		IAssetRegistry::Get()->GetDerivedClassNames(NativeRootClassPaths, {}, AllClassPaths);
 
-    for (const FTopLevelAssetPath& AssetPath : AllClassPaths)
-    {
-		const TSubclassOf<AFGBuildable> Class = StaticLoadClass(AFGBuildable::StaticClass(), nullptr, *AssetPath.ToString());
-		const FString Name = Class->GetName();
-		if (!AssetPath.GetPackageName().ToString().StartsWith("/Game/FactoryGame")
-			|| Name.StartsWith("SKEL_") || Name.StartsWith("REINST_"))
+		for (const FTopLevelAssetPath& AssetPath : AllClassPaths)
 		{
-			continue;
-		}
+			const TSubclassOf<AFGBuildable> Class = StaticLoadClass(AFGBuildable::StaticClass(), nullptr, *AssetPath.ToString());
+			const FString Name = Class->GetName();
+			if (!AssetPath.GetPackageName().ToString().StartsWith("/Game/FactoryGame")
+				|| Name.StartsWith("SKEL_") || Name.StartsWith("REINST_"))
+			{
+				continue;
+			}
 
-		const uint32 Hash = TextKeyUtil::HashString(AssetPath.ToString());
-		ClassPtrToClassIDMap.Add(Class, Hash);
-		ClassIDToClassPtrMap.Add(Hash, Class);
-        CARTO_LOG_DEBUG("Path: %s, Class: %s, Hash: %u", *AssetPath.ToString(), *Name, Hash);
-    }
+			const uint32 Hash = TextKeyUtil::HashString(AssetPath.ToString());
+			ClassPtrToClassIDMap.Add(Class, Hash);
+			ClassIDToClassPtrMap.Add(Hash, Class);
+			CARTO_LOG_DEBUG("Path: %s, Class: %s, Hash: %u", *AssetPath.ToString(), *Name, Hash);
+		}
+	}
+	{
+		TArray<UClass*> NativeRootClasses;
+		NativeRootClasses.Add(UFGBuildingDescriptor::StaticClass());
+		GetDerivedClasses(UFGBuildingDescriptor::StaticClass(), NativeRootClasses);
+
+		TArray<FTopLevelAssetPath> NativeRootClassPaths;
+
+		Algo::TransformIf(NativeRootClasses,
+			NativeRootClassPaths,
+			[](const UClass* RootClass) { return RootClass && RootClass->HasAnyClassFlags(CLASS_Native); },
+			&UClass::GetClassPathName);
+
+		TSet<FTopLevelAssetPath> AllClassPaths;
+		IAssetRegistry::Get()->GetDerivedClassNames(NativeRootClassPaths, {}, AllClassPaths);
+
+		for (const FTopLevelAssetPath& AssetPath : AllClassPaths)
+		{
+			const TSubclassOf<UFGBuildingDescriptor> Descriptor = StaticLoadClass(UFGBuildingDescriptor::StaticClass(), nullptr, *AssetPath.ToString());
+			const FString Name = Descriptor->GetName();
+			if (!AssetPath.GetPackageName().ToString().StartsWith("/Game/FactoryGame")
+				|| Name.StartsWith("SKEL_") || Name.StartsWith("REINST_"))
+			{
+				continue;
+			}
+
+			auto* DescriptorInstance = Cast<UFGBuildingDescriptor>(Descriptor->ClassDefaultObject);
+			TSubclassOf<AFGBuildable> BuildableClass = DescriptorInstance->mBuildableClass;
+			if (!BuildableClass)
+			{
+				continue;
+			}
+
+			TSubclassOf<UFGBuildSubCategory> BuildSubCategory;
+			for (const TSubclassOf<UFGCategory> SubCategory : DescriptorInstance->mSubCategories)
+			{
+                if (!SubCategory)
+                {
+                    CARTO_LOG_DEBUG("SubCategory is null: %s", *Name);
+                    continue;
+                }
+
+				if (SubCategory->IsChildOf(UFGBuildSubCategory::StaticClass()))
+				{
+					BuildSubCategory = SubCategory;
+					break;
+				}
+			}
+
+            UTexture2D* Icon = DescriptorInstance->mSmallIcon;
+			if (!Icon)
+			{
+                // Some buildings like blueprint designers don't have small icon
+				Icon = DescriptorInstance->mPersistentBigIcon;
+			}
+
+            ClassPtrToDescriptorDataMap.Add(BuildableClass, FBuildingDescriptorData{
+				.Category = DescriptorInstance->mCategory,
+				.SubCategory = BuildSubCategory,
+				.Icon = Icon,
+            });
+            CARTO_LOG_DEBUG("Path: %s, Class: %s, BuildableClass: %s",
+				*AssetPath.ToString(), 
+				*Name, 
+				*BuildableClass->GetName());
+		}
+	}
 }
 #endif
 

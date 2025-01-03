@@ -4,6 +4,7 @@
 #include "Kismet/KismetRenderingLibrary.h"
 #include "Module/GameInstanceModule.h"
 
+#include "FGBuildSubCategory.h"
 #include "FGLightweightBuildableSubsystem.h"
 
 #include "UE5Coro/UE5Coro.h"
@@ -15,6 +16,8 @@ class AFGBuildable;
 class AFGLightweightBuildableSubsystem;
 class UCanvasRenderTarget2D;
 class UFGBuildCategory;
+class UFGBuildSubCategory;
+class UFGBuildingDescriptor;
 
 
 DECLARE_LOG_CATEGORY_EXTERN(LogCartograph, Display, All);
@@ -227,6 +230,23 @@ struct FBuildLayerData
 };
 
 
+// RecipeManager::Get doesn't work for clients, CDO->Subcategory/Category/Icon is unreliable so caching these.
+USTRUCT()
+struct FBuildingDescriptorData
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditDefaultsOnly)
+    TSubclassOf<UFGCategory> Category;
+
+	UPROPERTY(EditDefaultsOnly)
+    TSubclassOf<UFGBuildSubCategory> SubCategory;
+
+	UPROPERTY(EditDefaultsOnly)
+	UTexture2D* Icon;
+};
+
+
 struct FRuntimeConfig
 {
 	TSet<FName> DisabledLayerMainCategory;
@@ -257,6 +277,9 @@ public:
 	const FBuildLayerData* GetBuildLayerData(uint32 ClassHash);
 
 	bool DoesBuildingExist(uint32 ClassHash) const;
+
+	template<typename T>
+	const T* GetDataByBuildableClass(const TMap<TSoftClassPtr<AFGBuildable>, T>& ClassMap, const TMap<TSoftClassPtr<UFGBuildCategory>, T>& CategoryMap, UClass* BuildableClass) const;
 
 private:
 	void RedrawMap();
@@ -309,6 +332,9 @@ public:
     TMap<uint32, TSubclassOf<AFGBuildable>> ClassIDToClassPtrMap;
 	UPROPERTY(EditDefaultsOnly, Category = "Generated Data")
     TMap<TSubclassOf<AFGBuildable>, uint32> ClassPtrToClassIDMap;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Generated Data")
+	TMap<TSubclassOf<AFGBuildable>, FBuildingDescriptorData> ClassPtrToDescriptorDataMap;
 
 
 	UPROPERTY(EditDefaultsOnly, Category = "Draw Data/Category Data")
@@ -403,3 +429,28 @@ protected:
     UPROPERTY(BlueprintReadOnly)
     bool DoShowBuildings = true;
 };
+
+
+
+template<typename T>
+const T* UCartographGameInstanceModule::GetDataByBuildableClass(const TMap<TSoftClassPtr<AFGBuildable>, T>& ClassMap, const TMap<TSoftClassPtr<UFGBuildCategory>, T>& CategoryMap, UClass* BuildableClass) const
+{
+	const T* Data = ClassMap.Find(BuildableClass);
+	if (!Data)
+	{
+		const FBuildingDescriptorData* DescriptorData = ClassPtrToDescriptorDataMap.Find(BuildableClass);
+		if (!DescriptorData)
+		{
+			UE_LOG(LogCartograph, Warning, TEXT("Can't find descriptor data for %s"), *BuildableClass->GetName());
+			return nullptr;
+		}
+
+		Data = CategoryMap.Find(DescriptorData->SubCategory.Get());
+		if (!Data)
+		{
+			Data = CategoryMap.Find(DescriptorData->Category.Get());
+		}
+	}
+
+	return Data;
+}

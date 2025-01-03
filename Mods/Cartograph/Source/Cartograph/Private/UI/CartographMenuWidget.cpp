@@ -4,7 +4,6 @@
 
 #include "FGBuildable.h"
 #include "FGBuildingDescriptor.h"
-#include "FGRecipeManager.h"
 
 #include "CartographGameInstanceModule.h"
 #include "CartographLayerToggleItemWidget.h"
@@ -67,8 +66,6 @@ void UCartographMenuWidget::InitializeLayers()
         LayerHeading.MainCategories.Add(CategoryData.Name, std::move(MainCategoryItem));
     }
 
-    const AFGRecipeManager* RecipeManager = AFGRecipeManager::Get(UCartographGameInstanceModule::Instance->GetWorld());
-    CARTO_LOG_ERROR_RETURN_IF_NULL(RecipeManager);
     const auto& BuildableClassRedirectMap = UCartographGameInstanceModule::Instance->BuildableClassRedirectMap;
     for (const auto& [BuildableClass, _] : UCartographGameInstanceModule::Instance->ClassPtrToClassIDMap)
     {
@@ -96,14 +93,18 @@ void UCartographMenuWidget::InitializeLayers()
             continue;
         }
 
-        const TSubclassOf<UFGBuildingDescriptor> Descriptor = RecipeManager->FindBuildingDescriptorByClass(BuildableClass);
-        if (!Descriptor)
+        const auto* DescriptorData = UCartographGameInstanceModule::Instance->ClassPtrToDescriptorDataMap.Find(BuildableClass);
+        if (!DescriptorData)
         {
-            UE_LOG(LogCartograph, Warning, TEXT("Can't find descriptor for %s"), *BuildableClass->GetName());
+            UE_LOG(LogCartograph, Warning, TEXT("Can't find descriptor data for %s"), *BuildableClass->GetName());
             continue;
         }
-        const FText BuildingName = UFGItemDescriptor::GetItemName(Descriptor);
-        UTexture2D* Icon = UFGItemDescriptor::GetSmallIcon(Descriptor);
+        UTexture2D* Icon = DescriptorData->Icon;
+        if (!Icon)
+        {
+            continue;
+        }
+        const FText BuildingName = Cast<AFGBuildable>(BuildableClass->ClassDefaultObject)->mDisplayName;
 
         FMainCategoryItem* MainCategoryItem = LayerHeading.MainCategories.Find(LayerData->MainCategoryCache);
         if (!MainCategoryItem)
