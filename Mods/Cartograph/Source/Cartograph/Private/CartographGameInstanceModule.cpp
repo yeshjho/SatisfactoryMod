@@ -751,7 +751,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 			GetWorld()->GetTimerManager().SetTimerForNextTick(
 				[this, ClassInstance]()
 				{
-					if (!ShouldInitialize)
+					if (!ShouldInitialize || !GIsRunning)
 					{
 						return;
 					}
@@ -777,7 +777,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
         {
 			CARTO_LOG_VERBOSE("AddFromBuildableInstanceData: %s, Skip: %d", *BuildableClass->GetName(), ShouldInitialize || FromSaveData || IsClient);
 
-			if (ShouldInitialize || FromSaveData || IsClient)
+			if (ShouldInitialize || FromSaveData || IsClient || !GIsRunning)
 			{
 				return;
 			}
@@ -800,7 +800,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 		{
 			CARTO_LOG_VERBOSE("AddFromReplicatedData: %s, Skip: %d", *BuildableClass->GetName(), ShouldInitialize || IsClient);
 
-			if (ShouldInitialize || IsClient)
+			if (ShouldInitialize || IsClient || !GIsRunning)
 			{
 				return;
 			}
@@ -821,7 +821,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 		{
 			CARTO_LOG_VERBOSE("AddBuildable: %s, Skip: %d", *Buildable->GetClass()->GetName(), ShouldInitialize || IsClient);
 
-			if (ShouldInitialize || IsClient)
+			if (ShouldInitialize || IsClient || !GIsRunning)
 			{
 				return;
 			}
@@ -843,7 +843,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 		{
 			CARTO_LOG_VERBOSE("InvalidateRuntimeInstanceDataForIndex: %s, Skip: %d", *BuildableClass->GetName(), ShouldInitialize || IsClient);
 
-			if (ShouldInitialize || IsClient)
+			if (ShouldInitialize || IsClient || !GIsRunning)
 			{
 				return;
 			}
@@ -867,7 +867,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 		{
 			CARTO_LOG_VERBOSE("RemoveBuildable: %s, Skip: %d", *Buildable->GetClass()->GetName(), ShouldInitialize || IsClient);
 
-			if (ShouldInitialize || IsClient)
+			if (ShouldInitialize || IsClient || !GIsRunning)
 			{
 				return;
 			}
@@ -888,7 +888,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 	const auto LambdaAfterCloseRespawnUI =
         [this](AFGHUD* ClassInstance)
         {
-            if (!ShouldInitialize)
+            if (!ShouldInitialize || !GIsRunning)
             {
 				return;
             }
