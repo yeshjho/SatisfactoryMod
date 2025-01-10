@@ -117,7 +117,7 @@ struct FBuildingData
 
     EBuildingDataType DataType = EBuildingDataType::Invalid;
 	std::variant<FNormalDataCache, FSplineDataCache, const struct FWireData*> DataCache;
-    const struct FBuildLayerData* LayerDataCache;
+    const struct FBuildLayerData* LayerDataCache = nullptr;
 
 
     bool NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess);

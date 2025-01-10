@@ -40,7 +40,11 @@ void UCartographRemoteCallObject::ServerRequestInitialBuildingData_Implementatio
         // FBufferWriter doesn't handle moving properly, don't TakeOwnership and free manually. Amazing code quality XD
         // Another warning: FBufferWriter ignores FName
         FBufferWriter Archive{ nullptr, 0, EBufferWriterFlags::AllowResize };
-        Archive.ArIsNetArchive = true;
+
+        // This should NOT be set since it'll prevent big array from being serialized.
+        // It's OK since we'll divide them and send gradually.
+        //Archive.ArIsNetArchive = true;
+
         Archive << UCartographGameInstanceModule::Instance->CurrentBuildingData;
         CARTO_LOG("Started Sending Initial Data: %d", Archive.TotalSize());
 
@@ -142,7 +146,7 @@ UE5Coro::TCoroutine<> UCartographRemoteCallObject::InitialBuildableDeserialize(F
         CARTO_LOG_DEBUG("Building: %u, Count: %d", ClassHash, Count);
     }
 
-    CARTO_LOG("InitialBuildableDeserialize Finished");
+    CARTO_LOG("InitialBuildableDeserialize Finished, %d", SerializeNum);
     
     UCartographGameInstanceModule::Instance->IsInitializing = false;
     UCartographGameInstanceModule::Instance->RedrawMap();
