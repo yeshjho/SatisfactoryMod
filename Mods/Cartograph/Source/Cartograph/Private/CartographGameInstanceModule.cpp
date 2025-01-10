@@ -530,13 +530,12 @@ void FBuildingData::CalculateSplinePoints()
         return;
     }
 
-    auto& [SplineData, StartPoints, EndPoints] = std::get<FSplineDataCache>(DataCache);
+    FSplineDataCache* SplineDataCachePtr = std::get_if<FSplineDataCache>(&DataCache);
+	CARTO_LOG_ERROR_RETURN_IF_NULL(SplineDataCachePtr);
+
+    auto& [SplineData, StartPoints, EndPoints] = *SplineDataCachePtr;
 	const FSplineExtraData* SplineExtraData = std::get_if<FSplineExtraData>(&BuildableExtraData);
-	if (!SplineExtraData)
-	{
-		CARTO_LOG_ERROR("Can't find spline extra data");
-		return;
-	}
+	CARTO_LOG_ERROR_RETURN_IF_NULL(SplineExtraData);
 
 	const int SplinePointCount = SplineExtraData->SplinePoints.Num();
 	if (SplinePointCount < 2)  // This should never happen, but just in case.
@@ -1222,7 +1221,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 			{
 				continue;
 			}
-			if (auto* SubCategories = RuntimeConfig.DisabledLayerSubCategory.Find(LayerDataCache->MainCategoryCache))
+			if (const TSet<FName>* SubCategories = RuntimeConfig.DisabledLayerSubCategory.Find(LayerDataCache->MainCategoryCache))
 			{
 				if (SubCategories->Contains(LayerDataCache->SubCategoryCache))
 				{
@@ -1238,15 +1237,20 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 
 		case EBuildingDataType::Icon:
 		{
-			const auto& [ScreenPosition, Size, Rotation, IconOrRectangleData] = std::get<FNormalDataCache>(DataCache);
-            const TSoftObjectPtr<UTexture2D>& Texture = std::get<TSoftObjectPtr<UTexture2D>>(IconOrRectangleData);
+			const FNormalDataCache* NormalDataCachePtr = std::get_if<FNormalDataCache>(&DataCache);
+			CARTO_LOG_ERROR_BREAK_IF_NULL(NormalDataCachePtr);
+
+			const auto& [ScreenPosition, Size, Rotation, IconOrRectangleData] = *NormalDataCachePtr;
+            const TSoftObjectPtr<UTexture2D>* Texture = std::get_if<TSoftObjectPtr<UTexture2D>>(&IconOrRectangleData);
+            CARTO_LOG_ERROR_BREAK_IF_NULL(Texture);
 
 			// The texture might have gotten unloaded between redraws, so we can't cache it.
-			const UTexture2D* LoadedTexture = Texture.Get();
+			const UTexture2D* LoadedTexture = Texture->Get();
 			if (!LoadedTexture)
 			{
-				LoadedTexture = co_await UE5Coro::Latent::AsyncLoadObject(Texture);
+				LoadedTexture = co_await UE5Coro::Latent::AsyncLoadObject(*Texture);
 			}
+			CARTO_LOG_ERROR_BREAK_IF_NULL(LoadedTexture);
 
 			FCanvasTileItem TileItem{
 				ScreenPosition,
@@ -1267,8 +1271,15 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 
 		case EBuildingDataType::Rectangle:
 		{
-			const auto& [ScreenPosition, Size, Rotation, IconOrRectangleData] = std::get<FNormalDataCache>(DataCache);
-			const auto& [CategoryData, LocalCorners] = std::get<FRectangleDataCache>(IconOrRectangleData);
+			const FNormalDataCache* NormalDataCachePtr = std::get_if<FNormalDataCache>(&DataCache);
+            CARTO_LOG_ERROR_BREAK_IF_NULL(NormalDataCachePtr);
+
+			const auto& [ScreenPosition, Size, Rotation, IconOrRectangleData] = *NormalDataCachePtr;
+			const FRectangleDataCache* RectangleDataCachePtr = std::get_if<FRectangleDataCache>(&IconOrRectangleData);
+			CARTO_LOG_ERROR_BREAK_IF_NULL(RectangleDataCachePtr);
+
+			const auto& [CategoryData, LocalCorners] = *RectangleDataCachePtr;
+			CARTO_LOG_ERROR_BREAK_IF_NULL(CategoryData);
 
 			FCanvasTileItem TileItem{
 				ScreenPosition,
@@ -1298,7 +1309,12 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 
 		case EBuildingDataType::Spline:
 		{
-			const auto& [SplineData, StartPoints, EndPoints] = std::get<FSplineDataCache>(DataCache);
+			const FSplineDataCache* SplineDataCachePtr = std::get_if<FSplineDataCache>(&DataCache);
+            CARTO_LOG_ERROR_BREAK_IF_NULL(SplineDataCachePtr);
+
+			const auto& [SplineData, StartPoints, EndPoints] = *SplineDataCachePtr;
+			CARTO_LOG_ERROR_BREAK_IF_NULL(SplineData);
+
             const int Num = StartPoints.Num();
             for (int j = 0; j < Num; j++)
             {
@@ -1312,13 +1328,11 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 		case EBuildingDataType::Wire:
 		{
 			const FWireExtraData* WireExtraData = std::get_if<FWireExtraData>(&BuildableExtraData);
-			if (!WireExtraData)
-			{
-				CARTO_LOG_ERROR("Can't find wire extra data");
-				continue;
-			}
+			CARTO_LOG_ERROR_BREAK_IF_NULL(WireExtraData);
 
-			const FWireData* WireData = std::get<const FWireData*>(DataCache);
+			const FWireData* const* WireDataPtr = std::get_if<const FWireData*>(&DataCache);
+			CARTO_LOG_ERROR_BREAK_IF_NULL(WireDataPtr);
+            const FWireData* WireData = *WireDataPtr;
 
 			draw_line(Canvas, Transform.GetLocation(), WireExtraData->End, WireData->Color, WireData->Thickness);
 
@@ -1328,13 +1342,11 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
         case EBuildingDataType::Beam:
 		{
 			const FBeamExtraData* BeamExtraData = std::get_if<FBeamExtraData>(&BuildableExtraData);
-			if (!BeamExtraData)
-			{
-				CARTO_LOG_ERROR("Can't find beam extra data");
-				continue;
-			}
+			CARTO_LOG_ERROR_BREAK_IF_NULL(BeamExtraData);
 
-			const FWireData* BeamData = std::get<const FWireData*>(DataCache);
+			const FWireData* const* BeamDataPtr = std::get_if<const FWireData*>(&DataCache);
+            CARTO_LOG_ERROR_BREAK_IF_NULL(BeamDataPtr);
+            const FWireData* BeamData = *BeamDataPtr;
 
 			const float Length = BeamExtraData->Length;
 			const FVector Start = Transform.GetLocation();

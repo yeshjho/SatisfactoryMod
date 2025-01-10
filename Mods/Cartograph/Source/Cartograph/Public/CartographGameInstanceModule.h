@@ -37,6 +37,7 @@ constexpr bool ENABLE_VERY_VERBOSE_LOG = false;
 #define CARTO_LOG_VERY_VERBOSE(format, ...) if constexpr (ENABLE_VERY_VERBOSE_LOG) UE_LOG(LogCartograph, Display, TEXT(format) __VA_OPT__(, __VA_ARGS__))
 
 #define CARTO_LOG_ERROR_RETURN_IF_NULL(ptr) if (!ptr) { CARTO_LOG_ERROR("'%s' is null", TEXT(#ptr)); return; }
+#define CARTO_LOG_ERROR_BREAK_IF_NULL(ptr) if (!ptr) { CARTO_LOG_ERROR("'%s' is null", TEXT(#ptr)); break; }
 
 
 struct FSplineExtraData
