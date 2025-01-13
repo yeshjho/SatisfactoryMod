@@ -84,6 +84,22 @@ void draw_line(UCanvas* Canvas, const T& WorldStart, const U& WorldEnd, const FL
 }
 
 
+void clear_render_target_portion(UCanvas* Canvas, const FBox2D& Region)
+{
+	const FVector2D Size = Region.GetSize();
+	const FVector2D ScreenPosition = world_position_to_screen_position(Region.GetCenter(), Size);
+	FCanvasTileItem TileItem{
+		ScreenPosition,
+		{ Size.X * PIXEL_PER_CENTIMETER[0], Size.Y * PIXEL_PER_CENTIMETER[1] },
+		{ 0, 0, 0, 0 }
+	};
+	TileItem.PivotPoint = { 0.5, 0.5 };
+	TileItem.BlendMode = SE_BLEND_Opaque;
+
+	Canvas->DrawItem(TileItem);
+}
+
+
 // This is used for actual equality check while removing
 bool FBuildingData::operator==(const FBuildingData& Other) const noexcept
 {
@@ -1186,8 +1202,6 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 		co_return;
 	}
 
-	UKismetRenderingLibrary::ClearRenderTarget2D(this, RenderTarget, { 0, 0, 0, 0 });
-
 	// Sometimes lines go crazy (goes to the top or far right) if we don't delay.
 	// My guess is because EndDraw and BeginDraw are called in the same frame, so I'm putting it here.
 	co_await UE5Coro::Latent::NextTick();
@@ -1195,6 +1209,8 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 	UCanvas* Canvas = nullptr;
 	FVector2D _;
 	UKismetRenderingLibrary::BeginDrawCanvasToRenderTarget(this, RenderTarget, Canvas, _, RenderContext);
+
+	clear_render_target_portion(Canvas, FBox2D{ { WEST_BOUND_CENTIMETERS, NORTH_BOUND_CENTIMETERS }, { EAST_BOUND_CENTIMETERS, SOUTH_BOUND_CENTIMETERS } });
 
     const int32 Min = Algo::LowerBound(CurrentBuildingData, MinZFilter);
     const int32 Max = Algo::UpperBound(CurrentBuildingData, MaxZFilter);
