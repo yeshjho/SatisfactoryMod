@@ -9,6 +9,8 @@
 
 #include "UE5Coro/UE5Coro.h"
 
+#include "CartographDataStructure.h"
+
 #include "CartographGameInstanceModule.generated.h"
 
 
@@ -18,6 +20,19 @@ class UCanvasRenderTarget2D;
 class UFGBuildCategory;
 class UFGBuildSubCategory;
 class UFGBuildingDescriptor;
+
+
+constexpr double WEST_BOUND_CENTIMETERS = -324698.832031;
+constexpr double EAST_BOUND_CENTIMETERS = 425301.832031;
+constexpr double NORTH_BOUND_CENTIMETERS = -375000;
+constexpr double SOUTH_BOUND_CENTIMETERS = 375000;
+constexpr double MAP_WIDTH_CENTIMETERS = EAST_BOUND_CENTIMETERS - WEST_BOUND_CENTIMETERS;
+constexpr double MAP_HEIGHT_CENTIMETERS = SOUTH_BOUND_CENTIMETERS - NORTH_BOUND_CENTIMETERS;
+
+constexpr int RENDER_TEXTURE_SIZE = 1024 * 8;
+
+constexpr double ORIGIN_UV[] = { -WEST_BOUND_CENTIMETERS / MAP_WIDTH_CENTIMETERS, -NORTH_BOUND_CENTIMETERS / MAP_HEIGHT_CENTIMETERS };
+constexpr double PIXEL_PER_CENTIMETER[] = { RENDER_TEXTURE_SIZE / MAP_WIDTH_CENTIMETERS, RENDER_TEXTURE_SIZE / MAP_HEIGHT_CENTIMETERS };
 
 
 DECLARE_LOG_CATEGORY_EXTERN(LogCartograph, Display, All);
@@ -37,113 +52,6 @@ constexpr bool ENABLE_VERY_VERBOSE_LOG = false;
 
 #define CARTO_LOG_ERROR_RETURN_IF_NULL(ptr) if (!ptr) { CARTO_LOG_ERROR("'%s' is null", TEXT(#ptr)); return; }
 #define CARTO_LOG_ERROR_BREAK_IF_NULL(ptr) if (!ptr) { CARTO_LOG_ERROR("'%s' is null", TEXT(#ptr)); break; }
-
-
-struct FSplineExtraData
-{
-	TArray<FVector2D> SplinePoints;
-	TOptional<std::pair<TArray<FVector2D>, TArray<FVector2D>>> Tangents;
-
-	bool operator==(const FSplineExtraData& Other) const noexcept = default;
-};
-
-
-struct FWireExtraData
-{
-	FVector2D End;
-
-	bool operator==(const FWireExtraData& Other) const noexcept = default;
-};
-
-
-struct FBeamExtraData
-{
-	float Length;
-
-	bool operator==(const FBeamExtraData& Other) const noexcept = default;
-};
-
-
-enum class EBuildingDataType
-{
-	Invalid = 0,
-
-	Icon = 1 << 0,
-	Rectangle = 1 << 1,
-	Spline = 1 << 2,
-	Wire = 1 << 3,
-	Beam = 1 << 4,
-
-    Normal = Icon | Rectangle,
-    Special = Spline | Wire | Beam,
-};
-ENUM_CLASS_FLAGS(EBuildingDataType)
-
-
-struct FRectangleDataCache
-{
-    const struct FCategoryData* CategoryData;
-	FVector LocalCorners[4];
-};
-
-
-struct FNormalDataCache
-{
-	FVector2D ScreenPosition;
-	FVector2D Size;
-	FRotator Rotation;
-	std::variant<TSoftObjectPtr<UTexture2D>, FRectangleDataCache> IconOrRectangleData;
-};
-
-
-struct FSplineDataCache
-{
-    const struct FSplineData* SplineData;
-	TArray<FVector2D> StartPoints;
-    TArray<FVector2D> EndPoints;
-};
-
-
-USTRUCT()
-struct FBuildingData
-{
-	GENERATED_BODY()
-
-	uint32 BuildableClassHash = 0;
-	FTransform Transform;
-	//FFactoryCustomizationData CustomizationData;
-	std::variant<std::monostate, FSplineExtraData, FWireExtraData, FBeamExtraData> BuildableExtraData;
-
-
-    EBuildingDataType DataType = EBuildingDataType::Invalid;
-	std::variant<FNormalDataCache, FSplineDataCache, const struct FWireData*> DataCache;
-    const struct FBuildLayerData* LayerDataCache = nullptr;
-
-
-    bool NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess);
-
-	bool operator==(const FBuildingData& Other) const noexcept;
-	std::partial_ordering operator<=>(const FBuildingData& Other) const noexcept;
-    std::partial_ordering operator<=>(float Z) const noexcept;
-
-	void FillInCache(TSubclassOf<AFGBuildable> OriginalBuildableClass);  // Call it after filling in the extra data
-    void FillInHash(TSubclassOf<AFGBuildable> OriginalBuildableClass);  // Call it after filling in the extra data
-	void FillInHashAndCache(TSubclassOf<AFGBuildable> BuildableClass);  // Call it after filling in the extra data
-    void CalculateSplinePoints();  // Call it after filling in the extra data & cache
-};
-
-
-FArchive& operator<<(FArchive& Ar, FBuildingData& BuildingData);
-
-
-template<>
-struct TStructOpsTypeTraits<FBuildingData> : public TStructOpsTypeTraitsBase2<FBuildingData>
-{
-	enum
-	{
-		WithNetSerializer = true
-	};
-};
 
 
 USTRUCT()
@@ -270,6 +178,7 @@ class CARTOGRAPH_API UCartographGameInstanceModule : public UGameInstanceModule
 	GENERATED_BODY()
 
     friend class ACartographModSubsystem;
+	friend class FCartographCanvasRenderItem;
 	friend class UCartographRemoteCallObject;
 
 public:
@@ -295,8 +204,6 @@ private:
 	void OnCoroutineFinishedOrCancelled();
 
 	void ExecuteRedrawMapCoroutine();
-
-	void AddExtraData(FBuildingData& BuildingData, AFGBuildable* Buildable);
 
 	void RegisterMenuButton() const;
 
@@ -460,4 +367,19 @@ const T* UCartographGameInstanceModule::GetDataByBuildableClass(const TMap<TSoft
 	}
 
 	return Data;
+}
+
+
+
+template<typename T, typename U>
+	requires
+	(std::is_same_v<T, FVector> || std::is_same_v<T, FVector2D>) &&
+	(std::is_same_v<U, FVector> || std::is_same_v<U, FVector2D>)
+FVector2D world_position_to_screen_position(const T& WorldPosition, const U& Size)
+{
+	return FVector2D{
+		// TODO: Width / 2 & Height / 2: Only verified for foundations
+		ORIGIN_UV[0] + (WorldPosition.X - Size.X / 2) / MAP_WIDTH_CENTIMETERS,
+		ORIGIN_UV[1] + (WorldPosition.Y - Size.Y / 2) / MAP_HEIGHT_CENTIMETERS
+	} * RENDER_TEXTURE_SIZE;
 }
