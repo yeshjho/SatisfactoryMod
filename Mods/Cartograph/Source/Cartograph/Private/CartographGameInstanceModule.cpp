@@ -3,6 +3,7 @@
 #include "AssetRegistryModule.h"
 #include "CanvasItem.h"
 #include "CanvasPanelSlot.h"
+#include "CanvasRender.h"
 #include "Engine/Canvas.h"
 #include "Engine/CanvasRenderTarget2D.h"
 #include "HorizontalBox.h"
@@ -26,6 +27,7 @@
 #include "Patching/BlueprintHookManager.h"
 #include "Patching/NativeHookManager.h"
 
+#include "CartographCanvasRenderItem.h"
 #include "CartographModSubsystem.h"
 #include "CartographRemoteCallObject.h"
 #include "Cartograph_ConfigStruct.h"
@@ -954,6 +956,46 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 
 		SUBSCRIBE_UOBJECT_METHOD_AFTER(AFGBuildableSubsystem, RemoveBuildable, LambdaAfterRemoveBuildable);
 
+
+		SUBSCRIBE_METHOD(FCanvas::GetBatchedElements,
+			[](auto& Scope, FCanvas* ClassInstance,
+				FCanvas::EElementType InElementType, FBatchedElementParameters* InBatchedElementParameters, const FTexture* InTexture, ESimpleElementBlendMode InBlendMode, const FDepthFieldGlowInfo& GlowInfo, bool bApplyDPIScale)
+			{
+				SCOPE_CYCLE_COUNTER(STAT_Canvas_GetBatchElementsTime);
+
+				// get sort element based on the current sort key from top of sort key stack
+				FCanvas::FCanvasSortElement& SortElement = ClassInstance->GetSortElement(ClassInstance->TopDepthSortKey());
+				// find a batch to use 
+				FCartographCanvasRenderItem* RenderBatch = nullptr;
+				// get the current transform entry from top of transform stack
+				FCanvas::FTransformEntry FinalTransform = ClassInstance->GetTransformStack().Top();
+
+				if (!bApplyDPIScale && ClassInstance->GetDPIScale() != 1.0f)
+				{
+					FinalTransform = FCanvas::FTransformEntry(FScaleMatrix(1 / ClassInstance->GetDPIScale()) * FinalTransform.GetMatrix());
+				}
+
+				// try to use the current top entry in the render batch array
+				if (SortElement.RenderBatchArray.Num() > 0)
+				{
+					checkSlow(SortElement.RenderBatchArray.Last());
+					RenderBatch = static_cast<FCartographCanvasRenderItem*>(SortElement.RenderBatchArray.Last());
+				}
+
+				// if a matching entry for this batch doesn't exist then allocate a new entry
+				if (RenderBatch == nullptr ||
+					!RenderBatch->IsMatch(InBatchedElementParameters, InTexture, InBlendMode, InElementType, FinalTransform, GlowInfo))
+				{
+					INC_DWORD_STAT(STAT_Canvas_NumBatchesCreated);
+
+					RenderBatch = new FCartographCanvasRenderItem(InBatchedElementParameters, InTexture, InBlendMode, InElementType, FinalTransform, GlowInfo);
+					SortElement.RenderBatchArray.Add(RenderBatch);
+				}
+
+				Scope.Override(RenderBatch->GetBatchedElements());
+			});
+
+
 		if (!FPlatformProperties::IsServerOnly())
 		{
 			UBlueprintHookManager* HookManager = GEngine->GetEngineSubsystem<UBlueprintHookManager>();
@@ -1209,6 +1251,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 	UCanvas* Canvas = nullptr;
 	FVector2D _;
 	UKismetRenderingLibrary::BeginDrawCanvasToRenderTarget(this, RenderTarget, Canvas, _, RenderContext);
+	CurrentCanvas = Canvas->Canvas;
 
 	clear_render_target_portion(Canvas, FBox2D{ { WEST_BOUND_CENTIMETERS, NORTH_BOUND_CENTIMETERS }, { EAST_BOUND_CENTIMETERS, SOUTH_BOUND_CENTIMETERS } });
 

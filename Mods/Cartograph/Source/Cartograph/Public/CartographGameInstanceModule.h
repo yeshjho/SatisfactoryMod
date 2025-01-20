@@ -410,6 +410,7 @@ protected:
 
 	UE5Coro::TCoroutine<> Coroutine = UE5Coro::TCoroutine<>::CompletedCoroutine;
 	FDrawToRenderTargetContext RenderContext;
+	FCanvas* CurrentCanvas = nullptr;
 	TArray<FBuildingData> CurrentBuildingData;
 
 	bool IsPendingRedraw = false;

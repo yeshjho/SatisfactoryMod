@@ -74,7 +74,7 @@ public class Cartograph : ModuleRules
 		});
 		
 		PrivateDependencyModuleNames.AddRange(new string[] {
-			// ... add private dependencies that you statically link with here ...	
+			"RHI"
 		});
 		
 		DynamicallyLoadedModuleNames.AddRange(new string[] {
