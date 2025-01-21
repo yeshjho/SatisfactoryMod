@@ -336,6 +336,8 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 				ShouldInitialize = false;
 				IsInitializing = true;
 				CurrentBuildingData.Empty();
+                BuildingDataIndexRedirector.Empty();
+                CurrentBuildingQuadTree.Empty();
                 BuildingCountMap.Empty();
 				RCO->ReceivedSliceCount = 0;
 				RCO->Buffer.Empty();
@@ -373,8 +375,6 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 			[](auto& Scope, FCanvas* ClassInstance,
 				FCanvas::EElementType InElementType, FBatchedElementParameters* InBatchedElementParameters, const FTexture* InTexture, ESimpleElementBlendMode InBlendMode, const FDepthFieldGlowInfo& GlowInfo, bool bApplyDPIScale)
 			{
-				SCOPE_CYCLE_COUNTER(STAT_Canvas_GetBatchElementsTime);
-
 				// get sort element based on the current sort key from top of sort key stack
 				FCanvas::FCanvasSortElement& SortElement = ClassInstance->GetSortElement(ClassInstance->TopDepthSortKey());
 				// find a batch to use 
@@ -398,8 +398,6 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 				if (RenderBatch == nullptr ||
 					!RenderBatch->IsMatch(InBatchedElementParameters, InTexture, InBlendMode, InElementType, FinalTransform, GlowInfo))
 				{
-					INC_DWORD_STAT(STAT_Canvas_NumBatchesCreated);
-
 					RenderBatch = new FCartographCanvasRenderItem(InBatchedElementParameters, InTexture, InBlendMode, InElementType, FinalTransform, GlowInfo);
 					SortElement.RenderBatchArray.Add(RenderBatch);
 				}
@@ -527,6 +525,8 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
 
 	const int Total = Factories.Num() + BuildingCount;
 	CurrentBuildingData.Empty(Total);
+    BuildingDataIndexRedirector.Empty();
+    CurrentBuildingQuadTree.Empty();
     BuildingCountMap.Empty();
 
 	const float TimeBudget = FCartograph_ConfigStruct::GetActiveConfig(GetWorld()).InitializeTimeBudget;
@@ -549,8 +549,8 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
 		NewBuildingData.FillInHashAndCache(Factory->GetClass());
 
 		const int32 Pos = Algo::LowerBound(CurrentBuildingData, NewBuildingData);
+		OnBuildingDataAdd(NewBuildingData, Pos);
 		CurrentBuildingData.Insert(std::move(NewBuildingData), Pos);
-        BuildingCountMap.FindOrAdd(NewBuildingData.BuildableClassHash)++;
 
         InitializeProgress = static_cast<float>(++Processed) / Total;
 		co_await Budget;
@@ -567,8 +567,8 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
 			NewBuildingData.FillInHashAndCache(Type);
 
 			const int32 Pos = Algo::LowerBound(CurrentBuildingData, NewBuildingData);
+            OnBuildingDataAdd(NewBuildingData, Pos);
 			CurrentBuildingData.Insert(std::move(NewBuildingData), Pos);
-            BuildingCountMap.FindOrAdd(NewBuildingData.BuildableClassHash)++;
 
 			InitializeProgress = static_cast<float>(++Processed) / Total;
 			co_await Budget;
@@ -614,8 +614,8 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 	        CARTO_LOG_DEBUG("AddedBuilding: %u", AddedBuildingData.BuildableClassHash);
 
 			const int32 Pos = Algo::LowerBound(CurrentBuildingData, AddedBuildingData);
+			OnBuildingDataAdd(AddedBuildingData, Pos);
 			CurrentBuildingData.Insert(std::move(AddedBuildingData), Pos);
-            BuildingCountMap.FindOrAdd(AddedBuildingData.BuildableClassHash)++;
 
 			co_await Budget;
 		}
@@ -631,8 +631,8 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 	        {
 	            if (RemovedBuildingData == CurrentBuildingData[i])
 	            {
+					OnBuildingDataRemove(CurrentBuildingData[i], i);
                     CurrentBuildingData.RemoveAt(i);
-                    BuildingCountMap.FindChecked(RemovedBuildingData.BuildableClassHash)--;
 	                break;
 	            }
                 if (RemovedBuildingData > CurrentBuildingData[i])
@@ -678,7 +678,8 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 
 	for (int32 i = Min; i < Max; i++)
 	{
-        const auto& [ClassHash, Transform/*, CustomizationData*/, BuildableExtraData, DataType, DataCache, LayerDataCache] = CurrentBuildingData[i];
+        const auto& [ClassHash, Transform/*, CustomizationData*/, BuildableExtraData, 
+			DataType, DataCache, LayerDataCache, VisualBoxCache] = CurrentBuildingData[i];
 
 		CARTO_LOG_VERY_VERBOSE("Buildable: %u, Transform: %s", ClassHash, *Transform.ToString());
 
@@ -749,7 +750,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 			const FRectangleDataCache* RectangleDataCachePtr = std::get_if<FRectangleDataCache>(&IconOrRectangleData);
 			CARTO_LOG_ERROR_BREAK_IF_NULL(RectangleDataCachePtr);
 
-			const auto& [CategoryData, LocalCorners] = *RectangleDataCachePtr;
+			const auto& [CategoryData, Corners] = *RectangleDataCachePtr;
 			CARTO_LOG_ERROR_BREAK_IF_NULL(CategoryData);
 
 			FCanvasTileItem TileItem{
@@ -766,13 +767,13 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 
 			if (CategoryData->OutlineThickness > 0)
 			{
-				draw_line(Canvas, LocalCorners[0], LocalCorners[1], CategoryData->OutlineColor, CategoryData->OutlineThickness);
+				draw_line(Canvas, Corners[0], Corners[1], CategoryData->OutlineColor, CategoryData->OutlineThickness);
 				co_await Budget;
-				draw_line(Canvas, LocalCorners[1], LocalCorners[2], CategoryData->OutlineColor, CategoryData->OutlineThickness);
+				draw_line(Canvas, Corners[1], Corners[2], CategoryData->OutlineColor, CategoryData->OutlineThickness);
 				co_await Budget;
-				draw_line(Canvas, LocalCorners[2], LocalCorners[3], CategoryData->OutlineColor, CategoryData->OutlineThickness);
+				draw_line(Canvas, Corners[2], Corners[3], CategoryData->OutlineColor, CategoryData->OutlineThickness);
 				co_await Budget;
-				draw_line(Canvas, LocalCorners[3], LocalCorners[0], CategoryData->OutlineColor, CategoryData->OutlineThickness);
+				draw_line(Canvas, Corners[3], Corners[0], CategoryData->OutlineColor, CategoryData->OutlineThickness);
 			}
 
 			break;
@@ -829,6 +830,19 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 
 		default:
 			break;
+		}
+
+		if constexpr (DRAW_BOUNDARIES)
+		{
+            constexpr FLinearColor Color{ 1, 0, 1, 1 };
+            constexpr float Thickness = 2;
+
+			const FVector2D MinPoint = VisualBoxCache.Min;
+            const FVector2D MaxPoint = VisualBoxCache.Max;
+            draw_line(Canvas, FVector2D{ MinPoint.X, MinPoint.Y }, FVector2D{ MaxPoint.X, MinPoint.Y }, Color, Thickness);
+			draw_line(Canvas, FVector2D{ MaxPoint.X, MinPoint.Y }, FVector2D{ MaxPoint.X, MaxPoint.Y }, Color, Thickness);
+			draw_line(Canvas, FVector2D{ MaxPoint.X, MaxPoint.Y }, FVector2D{ MinPoint.X, MaxPoint.Y }, Color, Thickness);
+			draw_line(Canvas, FVector2D{ MinPoint.X, MaxPoint.Y }, FVector2D{ MinPoint.X, MinPoint.Y }, Color, Thickness);
 		}
 
 		co_await Budget;
@@ -1135,6 +1149,43 @@ void UCartographGameInstanceModule::FillBuildLayerDataCache()
 	}
 
     CARTO_LOG("BuildLayerDataCache Filled. Count: %d", BuildLayerDataMapCache.Num());
+}
+
+
+void UCartographGameInstanceModule::OnBuildingDataAdd(const FBuildingData& AddedBuildingData, int32 Pos)
+{
+	CurrentBuildingQuadTree.Insert(BuildingDataIndexRedirector.Num(), AddedBuildingData.VisualBoxCache);
+	for (int32& Index : BuildingDataIndexRedirector)
+	{
+		if (Index >= Pos)
+		{
+			Index++;
+		}
+	}
+	BuildingDataIndexRedirector.Add(Pos);
+
+	BuildingCountMap.FindOrAdd(AddedBuildingData.BuildableClassHash)++;
+}
+
+
+void UCartographGameInstanceModule::OnBuildingDataRemove(const FBuildingData& RemovedBuildingData, int32 Pos)
+{
+    const int32 Num = BuildingDataIndexRedirector.Num();
+    for (int32 i = 0; i < Num; i++)
+    {
+		int32& BuildingDataArrayIndex = BuildingDataIndexRedirector[i];
+	    if (BuildingDataArrayIndex == Pos)
+	    {
+			CurrentBuildingQuadTree.Remove(i, RemovedBuildingData.VisualBoxCache);
+            BuildingDataArrayIndex = -1;
+	    }
+		else if (BuildingDataArrayIndex > Pos)
+		{
+			BuildingDataArrayIndex--;
+		}
+    }
+
+	BuildingCountMap.FindChecked(RemovedBuildingData.BuildableClassHash)--;
 }
 
 

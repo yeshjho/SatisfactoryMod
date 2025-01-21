@@ -121,6 +121,12 @@ UE5Coro::TCoroutine<> UCartographRemoteCallObject::InitialBuildableDeserialize(F
     const float TimeBudget = FCartograph_ConfigStruct::GetActiveConfig(GetWorld()).RedrawTimeBudget;
     UE5Coro::Latent::FTickTimeBudget Budget = UE5Coro::Latent::FTickTimeBudget::Milliseconds(TimeBudget);
 
+    if (!UCartographGameInstanceModule::Instance)
+    {
+        CARTO_LOG_ERROR("UCartographGameInstanceModule::Instance is null");
+        co_return;
+    }
+
     auto& A = UCartographGameInstanceModule::Instance->CurrentBuildingData;
 
     /// Below is from `FArchive& TArrayPrivateFriend::Serialize(FArchive& Ar, TArray<ElementType, AllocatorType>& A)`
@@ -136,7 +142,7 @@ UE5Coro::TCoroutine<> UCartographRemoteCallObject::InitialBuildableDeserialize(F
     {
 	    FBuildingData& NewElement = A.AddDefaulted_GetRef();
         Ar << NewElement;
-        UCartographGameInstanceModule::Instance->BuildingCountMap.FindOrAdd(NewElement.BuildableClassHash)++;
+        UCartographGameInstanceModule::Instance->OnBuildingDataAdd(NewElement, i);
         co_await Budget;
     }
     /// End

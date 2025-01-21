@@ -53,7 +53,7 @@ ENUM_CLASS_FLAGS(EBuildingDataType)
 struct FRectangleDataCache
 {
 	const struct FCategoryData* CategoryData;
-	FVector LocalCorners[4];
+	FVector Corners[4];
 };
 
 
@@ -88,6 +88,7 @@ struct FBuildingData
 	EBuildingDataType DataType = EBuildingDataType::Invalid;
 	std::variant<FNormalDataCache, FSplineDataCache, const struct FWireData*> DataCache;
 	const struct FBuildLayerData* LayerDataCache = nullptr;
+	FBox2D VisualBoxCache;
 
 
 	bool NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess);
@@ -101,7 +102,10 @@ struct FBuildingData
 	void FillInCache(TSubclassOf<AFGBuildable> OriginalBuildableClass);  // Call it after filling in the extra data
 	void FillInHash(TSubclassOf<AFGBuildable> OriginalBuildableClass);  // Call it after filling in the extra data
 	void FillInHashAndCache(TSubclassOf<AFGBuildable> BuildableClass);  // Call it after filling in the extra data
+    void FillInVisualBoxCache(TSubclassOf<AFGBuildable> OriginalBuildableClass);  // Call it after filling in the extra data
+
 	void CalculateSplinePoints();  // Call it after filling in the extra data & cache
+    void FillInSplineVisualBoxCache();  // Call it after filling in the extra data & cache
 };
 
 

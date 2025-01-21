@@ -353,11 +353,12 @@ void FBuildingData::FillInCache(TSubclassOf<AFGBuildable> OriginalBuildableClass
 		DataCache = FSplineDataCache{
 			.SplineData = SplineData,
 		};
-		CalculateSplinePoints();
-		return;
-	}
 
-	if (BuildableClass->IsChildOf(AFGBuildableWire::StaticClass()))
+		CalculateSplinePoints();
+
+        return;  // Visual Box Cache is filled in CalculateSplinePoints
+	}
+	else if (BuildableClass->IsChildOf(AFGBuildableWire::StaticClass()))
 	{
 		const auto& BuildableWireDataMap = UCartographGameInstanceModule::Instance->BuildableWireDataMap;
 
@@ -375,10 +376,8 @@ void FBuildingData::FillInCache(TSubclassOf<AFGBuildable> OriginalBuildableClass
 
 		DataType = EBuildingDataType::Wire;
 		DataCache = WireData;
-		return;
 	}
-
-	if (BuildableClass->IsChildOf(AFGBuildableBeam::StaticClass()))
+	else if (BuildableClass->IsChildOf(AFGBuildableBeam::StaticClass()))
 	{
 		const auto& BuildableWireDataMap = UCartographGameInstanceModule::Instance->BuildableWireDataMap;
 
@@ -396,89 +395,91 @@ void FBuildingData::FillInCache(TSubclassOf<AFGBuildable> OriginalBuildableClass
 
 		DataType = EBuildingDataType::Beam;
 		DataCache = BeamData;
-		return;
 	}
-
-
-	auto& BuildableSizeOverrideMap = UCartographGameInstanceModule::Instance->BuildableSizeOverrideMap;
-	FVector2D* Size = BuildableSizeOverrideMap.Find(BuildableClass.Get());
-	if (!Size)
+	else
 	{
-		const FBox ClearanceBox = Cast<AFGBuildable>(BuildableClass->ClassDefaultObject)->GetCombinedClearanceBox();
-		if (!ClearanceBox.IsValid)
+		auto& BuildableSizeOverrideMap = UCartographGameInstanceModule::Instance->BuildableSizeOverrideMap;
+		FVector2D* Size = BuildableSizeOverrideMap.Find(BuildableClass.Get());
+		if (!Size)
 		{
-			CARTO_LOG_WARNING("Can't find size for %s", *BuildableClass->GetName());
+			const FBox ClearanceBox = Cast<AFGBuildable>(BuildableClass->ClassDefaultObject)->GetCombinedClearanceBox();
+			if (!ClearanceBox.IsValid)
+			{
+				CARTO_LOG_WARNING("Can't find size for %s", *BuildableClass->GetName());
+				return;
+			}
+
+			FVector2D ClearanceBoxSize{ ClearanceBox.GetSize() };
+			Size = &ClearanceBoxSize;
+		}
+		if (Size->X == 0.f || Size->Y == 0.f)  // We don't need to draw, so don't even bother initializing the data cache.
+		{
 			return;
 		}
+		*Size *= FVector2D{ Transform.GetScale3D() };
 
-		FVector2D ClearanceBoxSize{ ClearanceBox.GetSize() };
-		Size = &ClearanceBoxSize;
+		FRotator Rotation = Transform.GetRotation().Rotator();
+		auto& BuildableExtraRotationMap = UCartographGameInstanceModule::Instance->BuildableExtraRotationMap;
+		if (const FRotator* ExtraRotation = BuildableExtraRotationMap.Find(BuildableClass.Get()))
+		{
+			Rotation += *ExtraRotation;
+		}
+
+		const FVector2D ScreenPosition = world_position_to_screen_position(Transform.GetLocation(), *Size);
+
+		auto& BuildableIconOverrideMap = UCartographGameInstanceModule::Instance->BuildableIconOverrideMap;
+		if (const TSoftObjectPtr<UTexture2D>* Texture = BuildableIconOverrideMap.Find(BuildableClass.Get());
+			Texture && !Texture->IsNull())
+		{
+			DataType = EBuildingDataType::Icon;
+			DataCache = FNormalDataCache{
+				.ScreenPosition = ScreenPosition,
+				.Size = *Size,
+				.Rotation = Rotation,
+				.IconOrRectangleData = *Texture,
+			};
+		}
+		else
+		{
+			const FCategoryData* CategoryData = UCartographGameInstanceModule::Instance->GetDataByBuildableClass(
+				UCartographGameInstanceModule::Instance->BuildableBuildCategoryDataOverrideMap,
+				UCartographGameInstanceModule::Instance->BuildCategoryDataMap,
+				BuildableClass.Get());
+			if (!CategoryData)
+			{
+				CARTO_LOG_WARNING("Can't find category data for %s", *BuildableClass->GetName());
+				return;
+			}
+
+			FRectangleDataCache RectangleData{
+				.CategoryData = CategoryData,
+			};
+
+			const float HalfWidth = Size->X / 2;
+			const float HalfHeight = Size->Y / 2;
+			RectangleData.Corners[0] = { -HalfWidth, -HalfHeight, 0 };
+			RectangleData.Corners[1] = { HalfWidth, -HalfHeight, 0 };
+			RectangleData.Corners[2] = { HalfWidth, HalfHeight, 0 };
+			RectangleData.Corners[3] = { -HalfWidth, HalfHeight, 0 };
+
+			FTransform TransformNoScale = Transform;
+			TransformNoScale.SetScale3D(FVector::OneVector);
+			for (FVector& Corner : RectangleData.Corners)
+			{
+				Corner = TransformNoScale.TransformPosition(Corner);
+			}
+
+			DataType = EBuildingDataType::Rectangle;
+			DataCache = FNormalDataCache{
+				.ScreenPosition = ScreenPosition,
+				.Size = *Size,
+				.Rotation = Rotation,
+				.IconOrRectangleData = std::move(RectangleData),
+			};
+		}
 	}
-	if (Size->X == 0.f || Size->Y == 0.f)  // We don't need to draw, so don't even bother initializing the data cache.
-	{
-		return;
-	}
-	*Size *= FVector2D{ Transform.GetScale3D() };
 
-	FRotator Rotation = Transform.GetRotation().Rotator();
-	auto& BuildableExtraRotationMap = UCartographGameInstanceModule::Instance->BuildableExtraRotationMap;
-	if (const FRotator* ExtraRotation = BuildableExtraRotationMap.Find(BuildableClass.Get()))
-	{
-		Rotation += *ExtraRotation;
-	}
-
-	const FVector2D ScreenPosition = world_position_to_screen_position(Transform.GetLocation(), *Size);
-
-	auto& BuildableIconOverrideMap = UCartographGameInstanceModule::Instance->BuildableIconOverrideMap;
-	if (const TSoftObjectPtr<UTexture2D>* Texture = BuildableIconOverrideMap.Find(BuildableClass.Get());
-		Texture && !Texture->IsNull())
-	{
-		DataType = EBuildingDataType::Icon;
-		DataCache = FNormalDataCache{
-			.ScreenPosition = ScreenPosition,
-			.Size = *Size,
-			.Rotation = Rotation,
-			.IconOrRectangleData = *Texture,
-		};
-
-		return;
-	}
-
-	const FCategoryData* CategoryData = UCartographGameInstanceModule::Instance->GetDataByBuildableClass(
-		UCartographGameInstanceModule::Instance->BuildableBuildCategoryDataOverrideMap,
-		UCartographGameInstanceModule::Instance->BuildCategoryDataMap,
-		BuildableClass.Get());
-	if (!CategoryData)
-	{
-		CARTO_LOG_WARNING("Can't find category data for %s", *BuildableClass->GetName());
-		return;
-	}
-
-	FRectangleDataCache RectangleData{
-		.CategoryData = CategoryData,
-	};
-
-	const float HalfWidth = Size->X / 2;
-	const float HalfHeight = Size->Y / 2;
-	RectangleData.LocalCorners[0] = { -HalfWidth, -HalfHeight, 0 };
-	RectangleData.LocalCorners[1] = { HalfWidth, -HalfHeight, 0 };
-	RectangleData.LocalCorners[2] = { HalfWidth, HalfHeight, 0 };
-	RectangleData.LocalCorners[3] = { -HalfWidth, HalfHeight, 0 };
-
-	FTransform TransformNoScale = Transform;
-	TransformNoScale.SetScale3D(FVector::OneVector);
-	for (FVector& Corner : RectangleData.LocalCorners)
-	{
-		Corner = TransformNoScale.TransformPosition(Corner);
-	}
-
-	DataType = EBuildingDataType::Rectangle;
-	DataCache = FNormalDataCache{
-		.ScreenPosition = ScreenPosition,
-		.Size = *Size,
-		.Rotation = Rotation,
-		.IconOrRectangleData = std::move(RectangleData),
-	};
+	FillInVisualBoxCache(OriginalBuildableClass);
 }
 
 
@@ -510,6 +511,83 @@ void FBuildingData::FillInHashAndCache(TSubclassOf<AFGBuildable> BuildableClass)
 	{
 		DataType = EBuildingDataType::Invalid;
 	}
+}
+
+
+constexpr float BoxExpansionCentimeters = 200;
+
+
+void FBuildingData::FillInVisualBoxCache(TSubclassOf<AFGBuildable> OriginalBuildableClass)
+{
+	VisualBoxCache = {};
+	VisualBoxCache.bIsValid = false;
+
+	const auto& BuildableClassRedirectMap = UCartographGameInstanceModule::Instance->BuildableClassRedirectMap;
+	const TSoftClassPtr<AFGBuildable>* RedirectClass = BuildableClassRedirectMap.Find(OriginalBuildableClass.Get());
+	const TSubclassOf<AFGBuildable> BuildableClass = RedirectClass ? RedirectClass->LoadSynchronous() : OriginalBuildableClass.Get();
+
+	if (BuildableClass->ImplementsInterface(UFGSplineBuildableInterface::StaticClass()))
+	{
+		FillInSplineVisualBoxCache();
+	}
+	else if (BuildableClass->IsChildOf(AFGBuildableWire::StaticClass()))
+	{
+		const FWireExtraData* WireExtraData = std::get_if<FWireExtraData>(&BuildableExtraData);
+		CARTO_LOG_ERROR_RETURN_IF_NULL(WireExtraData);
+
+		VisualBoxCache += FVector2D{ Transform.GetLocation() };
+		VisualBoxCache += WireExtraData->End;
+	}
+	else if (BuildableClass->IsChildOf(AFGBuildableBeam::StaticClass()))
+	{
+		const FBeamExtraData* BeamExtraData = std::get_if<FBeamExtraData>(&BuildableExtraData);
+		CARTO_LOG_ERROR_RETURN_IF_NULL(BeamExtraData);
+
+		const float Length = BeamExtraData->Length;
+		const FVector Start = Transform.GetLocation();
+		VisualBoxCache += FVector2D{ Start };
+		VisualBoxCache += FVector2D{ Start + Transform.GetRotation().Vector() * Length };
+	}
+	else
+	{
+		auto& BuildableSizeOverrideMap = UCartographGameInstanceModule::Instance->BuildableSizeOverrideMap;
+		FVector2D* Size = BuildableSizeOverrideMap.Find(BuildableClass.Get());
+		if (!Size)
+		{
+			const FBox ClearanceBox = Cast<AFGBuildable>(BuildableClass->ClassDefaultObject)->GetCombinedClearanceBox();
+			if (!ClearanceBox.IsValid)
+			{
+				CARTO_LOG_WARNING("Can't find size for %s", *BuildableClass->GetName());
+				return;
+			}
+
+			FVector2D ClearanceBoxSize{ ClearanceBox.GetSize() };
+			Size = &ClearanceBoxSize;
+		}
+		if (Size->X == 0.f || Size->Y == 0.f)  // We don't need to draw, so don't even bother initializing the data cache.
+		{
+			return;
+		}
+		*Size *= FVector2D{ Transform.GetScale3D() };
+
+		FVector Corners[4];
+		const float HalfWidth = Size->X / 2;
+		const float HalfHeight = Size->Y / 2;
+		Corners[0] = { -HalfWidth, -HalfHeight, 0 };
+		Corners[1] = { HalfWidth, -HalfHeight, 0 };
+		Corners[2] = { HalfWidth, HalfHeight, 0 };
+		Corners[3] = { -HalfWidth, HalfHeight, 0 };
+
+		FTransform TransformNoScale = Transform;
+		TransformNoScale.SetScale3D(FVector::OneVector);
+		for (FVector& Corner : Corners)
+		{
+			Corner = TransformNoScale.TransformPosition(Corner);
+			VisualBoxCache += FVector2D{ Corner };
+		}
+	}
+
+	VisualBoxCache = VisualBoxCache.ExpandBy(BoxExpansionCentimeters);
 }
 
 
@@ -566,4 +644,28 @@ void FBuildingData::CalculateSplinePoints()
 			}
 		}
 	}
+
+	FillInSplineVisualBoxCache();
+}
+
+
+void FBuildingData::FillInSplineVisualBoxCache()
+{
+	FSplineDataCache* SplineDataCachePtr = std::get_if<FSplineDataCache>(&DataCache);
+	CARTO_LOG_ERROR_RETURN_IF_NULL(SplineDataCachePtr);
+
+	auto& [SplineData, StartPoints, EndPoints] = *SplineDataCachePtr;
+
+	VisualBoxCache = {};
+	VisualBoxCache.bIsValid = false;
+
+	for (const FVector2D& StartPoint : StartPoints)
+	{
+		VisualBoxCache += StartPoint;
+	}
+	for (const FVector2D& EndPoint : EndPoints)
+	{
+		VisualBoxCache += EndPoint;
+	}
+	VisualBoxCache = VisualBoxCache.ExpandBy(BoxExpansionCentimeters);
 }

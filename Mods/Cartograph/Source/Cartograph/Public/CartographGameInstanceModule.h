@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "GenericQuadTree.h"
 #include "Kismet/KismetRenderingLibrary.h"
 #include "Module/GameInstanceModule.h"
 
@@ -41,6 +42,8 @@ DECLARE_LOG_CATEGORY_EXTERN(LogCartograph, Display, All);
 constexpr bool ENABLE_DEBUG_LOG = false;
 constexpr bool ENABLE_VERBOSE_LOG = false;
 constexpr bool ENABLE_VERY_VERBOSE_LOG = false;
+
+constexpr bool DRAW_BOUNDARIES = true;
 
 #define CARTO_LOG(format, ...) UE_LOG(LogCartograph, Display, TEXT("(%u)") TEXT(format), __LINE__ __VA_OPT__(, __VA_ARGS__))
 #define CARTO_LOG_WARNING(format, ...) UE_LOG(LogCartograph, Warning, TEXT("(%u)") TEXT(format), __LINE__ __VA_OPT__(, __VA_ARGS__))
@@ -212,6 +215,9 @@ private:
 
 	void FillBuildLayerDataCache();
 
+	void OnBuildingDataAdd(const FBuildingData& AddedBuildingData, int32 Pos);
+    void OnBuildingDataRemove(const FBuildingData& RemovedBuildingData, int32 Pos);
+
 #if WITH_EDITOR
 	virtual void PostCDOContruct() override;
 #endif
@@ -239,7 +245,7 @@ public:
 
 	FRuntimeConfig RuntimeConfig;
 
-
+#pragma region Static Data
 	// Made it editable since it doesn't get cleared properly sometimes.
 	UPROPERTY(EditDefaultsOnly, Category = "Generated Data")
     TMap<uint32, TSubclassOf<AFGBuildable>> ClassIDToClassPtrMap;
@@ -305,6 +311,7 @@ protected:
 
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UUserWidget> MenuWidget;
+#pragma endregion
 
 
 	TMap<uint32, const FBuildLayerData*> BuildLayerDataMapCache;
@@ -319,6 +326,13 @@ protected:
 	FDrawToRenderTargetContext RenderContext;
 	FCanvas* CurrentCanvas = nullptr;
 	TArray<FBuildingData> CurrentBuildingData;
+
+	/// To get the building data from the quad tree,
+	/// CurrentBuildingData[BuildingDataIndexRedirector[CurrentBuildingQuadTree]]
+    ///	The redirector array doesn't get .Remove()'d, when a building is removed, since we can't update the quad tree's elements.
+
+	TArray<int32> BuildingDataIndexRedirector;
+	TQuadTree<int32> CurrentBuildingQuadTree{ FBox2D{ { WEST_BOUND_CENTIMETERS, NORTH_BOUND_CENTIMETERS }, { EAST_BOUND_CENTIMETERS, SOUTH_BOUND_CENTIMETERS } } };
 
 	bool IsPendingRedraw = false;
 	TArray<FBuildingData> PendingAddBuildingData;
@@ -378,7 +392,6 @@ template<typename T, typename U>
 FVector2D world_position_to_screen_position(const T& WorldPosition, const U& Size)
 {
 	return FVector2D{
-		// TODO: Width / 2 & Height / 2: Only verified for foundations
 		ORIGIN_UV[0] + (WorldPosition.X - Size.X / 2) / MAP_WIDTH_CENTIMETERS,
 		ORIGIN_UV[1] + (WorldPosition.Y - Size.Y / 2) / MAP_HEIGHT_CENTIMETERS
 	} * RENDER_TEXTURE_SIZE;
