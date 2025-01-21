@@ -647,6 +647,9 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 
         MinHeight = !CurrentBuildingData.IsEmpty() ? CurrentBuildingData[0].Transform.GetLocation().Z : -100;
         MaxHeight = !CurrentBuildingData.IsEmpty() ? CurrentBuildingData.Last().Transform.GetLocation().Z : 100;
+		const float Length = MaxHeight - MinHeight;
+		MinZFilter = FMath::Floor(MinCached * Length + MinHeight);
+		MaxZFilter = FMath::CeilToInt(MaxCached * Length + MinHeight);
 
         CARTO_LOG("Buildings Change Processed");
 	}
@@ -894,6 +897,9 @@ void UCartographGameInstanceModule::ExecuteRedrawMapCoroutine()
 
 void UCartographGameInstanceModule::OnZFilterUpdated(float Min, float Max)
 {
+	MinCached = Min;
+    MaxCached = Max;
+
 	const float Length = MaxHeight - MinHeight;
 	MinZFilter = FMath::Floor(Min * Length + MinHeight);
 	MaxZFilter = FMath::CeilToInt(Max * Length + MinHeight);

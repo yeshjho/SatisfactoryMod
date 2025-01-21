@@ -354,6 +354,9 @@ protected:
 	UPROPERTY(BlueprintReadOnly)
 	float MaxHeight = 100;
 
+	float MinCached;
+    float MaxCached;
+
     UPROPERTY(BlueprintReadOnly)
     bool DoShowBuildings = true;
 };
