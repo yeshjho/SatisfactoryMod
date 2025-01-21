@@ -42,5 +42,5 @@ void ACartographModSubsystem::ClientUpdateBuildingData_Implementation(const TArr
     UCartographGameInstanceModule::Instance->PendingAddBuildingData.Append(AddedBuildings);
     UCartographGameInstanceModule::Instance->PendingRemoveBuildingData.Append(RemovedBuildings);
 
-    UCartographGameInstanceModule::Instance->RedrawMap();
+    UCartographGameInstanceModule::Instance->RedrawMap(false);
 }

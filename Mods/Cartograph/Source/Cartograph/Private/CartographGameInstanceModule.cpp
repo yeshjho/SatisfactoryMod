@@ -1,11 +1,13 @@
 #include "CartographGameInstanceModule.h"
 
+#include <numeric>
+
 #include "AssetRegistryModule.h"
 #include "CanvasItem.h"
 #include "CanvasPanelSlot.h"
-#include "CanvasRender.h"
 #include "Engine/Canvas.h"
 #include "Engine/CanvasRenderTarget2D.h"
+#include "FindLast.h"
 #include "HorizontalBox.h"
 #include "HorizontalBoxSlot.h"
 #include "OutputDeviceNull.h"
@@ -60,22 +62,6 @@ void draw_line(UCanvas* Canvas, const T& WorldStart, const U& WorldEnd, const FL
 }
 
 
-void clear_render_target_portion(UCanvas* Canvas, const FBox2D& Region)
-{
-	const FVector2D Size = Region.GetSize();
-	const FVector2D ScreenPosition = world_position_to_screen_position(Region.GetCenter(), Size);
-	FCanvasTileItem TileItem{
-		ScreenPosition,
-		{ Size.X * PIXEL_PER_CENTIMETER[0], Size.Y * PIXEL_PER_CENTIMETER[1] },
-		{ 0, 0, 0, 0 }
-	};
-	TileItem.PivotPoint = { 0.5, 0.5 };
-	TileItem.BlendMode = SE_BLEND_Opaque;
-
-	Canvas->DrawItem(TileItem);
-}
-
-
 void UCartographGameInstanceModule::AfterSplineSegmentsModified()
 {
 	FCartograph_ConfigStruct ConfigInstance = FCartograph_ConfigStruct::GetActiveConfig(GetWorld());
@@ -101,7 +87,7 @@ void UCartographGameInstanceModule::AfterSplineSegmentsModified()
 	}
 
     CARTO_LOG("Spline segments modified");
-	RedrawMap();
+	RedrawMap(true);
 }
 
 
@@ -218,7 +204,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
             Data.FillInHashAndCache(BuildableClass);
 			PendingAddBuildingData.Add(std::move(Data));
 
-			RedrawMap();
+			RedrawMap(false);
         };
 
 
@@ -241,7 +227,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 			Data.FillInHashAndCache(BuildableClass);
 			PendingAddBuildingData.Add(std::move(Data));
 
-			RedrawMap();
+			RedrawMap(false);
 		};
 
 
@@ -263,7 +249,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 			Data.FillInHashAndCache(Buildable->GetClass());
 			PendingAddBuildingData.Add(std::move(Data));
 
-			RedrawMap();
+			RedrawMap(false);
 		};
 
 
@@ -287,7 +273,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 			Data.FillInHash(BuildableClass);
             PendingRemoveBuildingData.Add(std::move(Data));
 
-			RedrawMap();
+			RedrawMap(false);
 		};
 
 
@@ -310,7 +296,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 			Data.FillInHash(Buildable->GetClass());
 			PendingRemoveBuildingData.Add(std::move(Data));
 
-			RedrawMap();
+			RedrawMap(false);
 		};
 
 
@@ -469,7 +455,7 @@ void UCartographGameInstanceModule::OnLayerConfigChanged()
 {
     CARTO_LOG("OnLayerConfigChanged");
 
-	RedrawMap();
+	RedrawMap(true);
 	SaveRuntimeConfig();
 }
 
@@ -493,7 +479,7 @@ bool UCartographGameInstanceModule::DoesBuildingExist(uint32 ClassHash) const
 
 
 #pragma region Drawing
-void UCartographGameInstanceModule::RedrawMap()
+void UCartographGameInstanceModule::RedrawMap(bool bRedrawEntirely)
 {
 	if (!Coroutine.IsDone())
 	{
@@ -502,11 +488,12 @@ void UCartographGameInstanceModule::RedrawMap()
 			CARTO_LOG_DEBUG("RedrawMapCoroutine Cancel Requested");
 			Coroutine.Cancel();
 		}
+        IsPendingRedrawEntire = bRedrawEntirely;
 		IsPendingRedraw = true;
 	}
 	else if (!IsClient || !IsInitializing)
 	{
-		ExecuteRedrawMapCoroutine();
+		ExecuteRedrawMapCoroutine(bRedrawEntirely);
 	}
 }
 
@@ -588,23 +575,25 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
 
 	IsInitializing = false;
 	IsPendingRedraw = false;
-	ExecuteRedrawMapCoroutine();
+	ExecuteRedrawMapCoroutine(true);
 }
 
 
 // AddedBuildings/RemovedBuildings: Intentional copies
 UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
-	TArray<FBuildingData> AddedBuildings, TArray<FBuildingData> RemovedBuildings, FForceLatentCoroutine)
+	TArray<FBuildingData> AddedBuildings, TArray<FBuildingData> RemovedBuildings, bool bRedrawEntirely, FForceLatentCoroutine)
 {
 	ON_SCOPE_EXIT
 	{
         OnCoroutineFinishedOrCancelled();
 	};
 
-	CARTO_LOG("RedrawMapCoroutine Started");
+	CARTO_LOG("RedrawMapCoroutine Started. Entire: %d", bRedrawEntirely);
 
 	const float TimeBudget = FCartograph_ConfigStruct::GetActiveConfig(GetWorld()).RedrawTimeBudget;
 	UE5Coro::Latent::FTickTimeBudget Budget = UE5Coro::Latent::FTickTimeBudget::Milliseconds(TimeBudget);
+
+    IsRedrawingEntirely |= bRedrawEntirely;
 
 	{
         UE5Coro::FCancellationGuard Guard{};  // We'll lose added/removed building information if the coroutine is cancelled
@@ -612,6 +601,11 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 		for (FBuildingData& AddedBuildingData : AddedBuildings)
 		{
 	        CARTO_LOG_DEBUG("AddedBuilding: %u", AddedBuildingData.BuildableClassHash);
+
+			if (!IsRedrawingEntirely)
+			{
+				RedrawArea += AddedBuildingData.VisualBoxCache;
+			}
 
 			const int32 Pos = Algo::LowerBound(CurrentBuildingData, AddedBuildingData);
 			OnBuildingDataAdd(AddedBuildingData, Pos);
@@ -631,6 +625,11 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 	        {
 	            if (RemovedBuildingData == CurrentBuildingData[i])
 	            {
+					if (!IsRedrawingEntirely)
+					{
+						RedrawArea += CurrentBuildingData[i].VisualBoxCache;
+					}
+
 					OnBuildingDataRemove(CurrentBuildingData[i], i);
                     CurrentBuildingData.RemoveAt(i);
 	                break;
@@ -668,18 +667,83 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 	UKismetRenderingLibrary::BeginDrawCanvasToRenderTarget(this, RenderTarget, Canvas, _, RenderContext);
 	CurrentCanvas = Canvas->Canvas;
 
-	clear_render_target_portion(Canvas, FBox2D{ { WEST_BOUND_CENTIMETERS, NORTH_BOUND_CENTIMETERS }, { EAST_BOUND_CENTIMETERS, SOUTH_BOUND_CENTIMETERS } });
+	if (IsRedrawingEntirely)
+	{
+		ScissorArea = { 0, 0, RENDER_TEXTURE_SIZE, RENDER_TEXTURE_SIZE };
+	}
+	else
+	{
+		const FVector2D MinScreenPosition = world_position_to_screen_position(RedrawArea.Min, FVector::ZeroVector);
+        const FVector2D MaxScreenPosition = world_position_to_screen_position(RedrawArea.Max, FVector::ZeroVector);
+		const auto MinIntX = static_cast<uint32>(FMath::Max(0, FMath::FloorToInt(MinScreenPosition.X)));
+        const auto MinIntY = static_cast<uint32>(FMath::Max(0, FMath::FloorToInt(MinScreenPosition.Y)));
+        const auto MaxIntX = static_cast<uint32>(FMath::Min(RENDER_TEXTURE_SIZE, FMath::CeilToInt(MaxScreenPosition.X)));
+        const auto MaxIntY = static_cast<uint32>(FMath::Min(RENDER_TEXTURE_SIZE, FMath::CeilToInt(MaxScreenPosition.Y)));
+        ScissorArea = { MinIntX, MinIntY, MaxIntX, MaxIntY };
+        RedrawArea = {
+        	screen_position_to_world_position(FVector2D{ static_cast<double>(MinIntX), static_cast<double>(MinIntY) }),
+			screen_position_to_world_position(FVector2D{ static_cast<double>(MaxIntX), static_cast<double>(MaxIntY) })
+        };
+		CARTO_LOG_DEBUG("RedrawArea: %s", *RedrawArea.ToString());
+	}
+
+	FCanvasTileItem ClearItem{
+		{ 0, 0 },
+		{ RENDER_TEXTURE_SIZE, RENDER_TEXTURE_SIZE },
+		{ 0, 0, 0, 0 }
+	};
+	ClearItem.BlendMode = SE_BLEND_Opaque;
+
+	Canvas->DrawItem(ClearItem);
+
 
     const int32 Min = Algo::LowerBound(CurrentBuildingData, MinZFilter);
     const int32 Max = Algo::UpperBound(CurrentBuildingData, MaxZFilter);
     if (Min >= CurrentBuildingData.Num() || Max <= 0)
     {
+		IsRedrawingEntirely = false;
+		RedrawArea = {};
+		RedrawArea.bIsValid = false;
         co_return;
     }
 
 	CARTO_LOG_DEBUG("From %d to %d out of %d", Min, Max, CurrentBuildingData.Num());
 
-	for (int32 i = Min; i < Max; i++)
+	TArray<int32> BuildingsToDraw;
+	if (IsRedrawingEntirely)
+	{
+        BuildingsToDraw.SetNum(Max - Min);
+        std::iota(BuildingsToDraw.begin(), BuildingsToDraw.end(), Min);
+	}
+	else
+	{
+		CurrentBuildingQuadTree.GetElements(RedrawArea, BuildingsToDraw);
+		co_await Budget;
+
+        std::transform(BuildingsToDraw.begin(), BuildingsToDraw.end(), BuildingsToDraw.begin(), 
+			[this](int32 Index) { return BuildingDataIndexRedirector[Index]; });
+		Algo::Sort(BuildingsToDraw);
+        co_await Budget;
+
+		const int* MinIt = Algo::FindByPredicate(BuildingsToDraw, [Min](int32 Index) { return Index >= Min; });
+		const int* MaxIt = Algo::FindLastByPredicate(BuildingsToDraw, [Max](int32 Index) { return Index < Max; });
+        if (!MinIt || !MaxIt)
+        {
+			IsRedrawingEntirely = false;
+			RedrawArea = {};
+			RedrawArea.bIsValid = false;
+            co_return;
+        }
+
+		const int* Beg = BuildingsToDraw.GetData();
+        BuildingsToDraw.RemoveAt(MaxIt - Beg + 1, BuildingsToDraw.Num() - (MaxIt - Beg + 1), false);
+        BuildingsToDraw.RemoveAt(0, MinIt - Beg);
+		co_await Budget;
+
+		CARTO_LOG_DEBUG("Overlapping Elements: %d", BuildingsToDraw.Num());
+	}
+
+	for (int32 i : BuildingsToDraw)
 	{
         const auto& [ClassHash, Transform/*, CustomizationData*/, BuildableExtraData, 
 			DataType, DataCache, LayerDataCache, VisualBoxCache] = CurrentBuildingData[i];
@@ -851,6 +915,10 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 		co_await Budget;
 	}
 
+	IsRedrawingEntirely = false;
+	RedrawArea = {};
+	RedrawArea.bIsValid = false;
+
 	CARTO_LOG("RedrawMapCoroutine Finished");
 }
 
@@ -872,13 +940,13 @@ void UCartographGameInstanceModule::OnCoroutineFinishedOrCancelled()
 
 	// The coroutine is also on the game thread, so I think no data race here.
     IsPendingRedraw = false;
-	ExecuteRedrawMapCoroutine();
+	ExecuteRedrawMapCoroutine(IsPendingRedrawEntire);
 }
 
 
-void UCartographGameInstanceModule::ExecuteRedrawMapCoroutine()
+void UCartographGameInstanceModule::ExecuteRedrawMapCoroutine(bool bRedrawEntirely)
 {
-	Coroutine = RedrawMapCoroutine(PendingAddBuildingData, PendingRemoveBuildingData);
+	Coroutine = RedrawMapCoroutine(PendingAddBuildingData, PendingRemoveBuildingData, bRedrawEntirely);
 	if (!IsClient)
 	{
 		if (!ACartographModSubsystem::Instance)
@@ -908,7 +976,7 @@ void UCartographGameInstanceModule::OnZFilterUpdated(float Min, float Max)
 
 	if (!IsInitializing)
 	{
-		RedrawMap();
+		RedrawMap(true);
 	}
 }
 #pragma endregion

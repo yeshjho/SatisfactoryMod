@@ -101,7 +101,8 @@ bool FCartographCanvasRenderItem::Render_GameThread(const FCanvas* Canvas, FCanv
 
 				if (IsCartograph)
 				{
-					RHICmdList.SetScissorRect(true, 0, 0, 4096, 4096);
+					const std::array<uint32, 4>& Area = UCartographGameInstanceModule::Instance->ScissorArea;
+					RHICmdList.SetScissorRect(true, Area[0], Area[1], Area[2], Area[3]);
 				}
 				// draw batched items
 				DrawParameters.RenderData->BatchedElements.Draw(

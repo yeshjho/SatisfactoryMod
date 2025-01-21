@@ -1,5 +1,7 @@
 #pragma once
 
+#include <array>
+
 #include "CoreMinimal.h"
 #include "GenericQuadTree.h"
 #include "Kismet/KismetRenderingLibrary.h"
@@ -43,7 +45,7 @@ constexpr bool ENABLE_DEBUG_LOG = false;
 constexpr bool ENABLE_VERBOSE_LOG = false;
 constexpr bool ENABLE_VERY_VERBOSE_LOG = false;
 
-constexpr bool DRAW_BOUNDARIES = true;
+constexpr bool DRAW_BOUNDARIES = false;
 
 #define CARTO_LOG(format, ...) UE_LOG(LogCartograph, Display, TEXT("(%u)") TEXT(format), __LINE__ __VA_OPT__(, __VA_ARGS__))
 #define CARTO_LOG_WARNING(format, ...) UE_LOG(LogCartograph, Warning, TEXT("(%u)") TEXT(format), __LINE__ __VA_OPT__(, __VA_ARGS__))
@@ -200,13 +202,13 @@ public:
 	const T* GetDataByBuildableClass(const TMap<TSoftClassPtr<AFGBuildable>, T>& ClassMap, const TMap<TSoftClassPtr<UFGBuildCategory>, T>& CategoryMap, UClass* BuildableClass) const;
 
 private:
-	void RedrawMap();
+	void RedrawMap(bool bRedrawEntirely);
 	UE5Coro::TCoroutine<> InitialBuildableGather(TArray<TWeakObjectPtr<AFGBuildable>> Factories, TMap<TSubclassOf<AFGBuildable>, TArray<FRuntimeBuildableInstanceData>> Buildings, FForceLatentCoroutine = {});
-	UE5Coro::TCoroutine<> RedrawMapCoroutine(TArray<FBuildingData> AddedBuildings, TArray<FBuildingData> RemovedBuildings, FForceLatentCoroutine = {});
+	UE5Coro::TCoroutine<> RedrawMapCoroutine(TArray<FBuildingData> AddedBuildings, TArray<FBuildingData> RemovedBuildings, bool bRedrawEntirely, FForceLatentCoroutine = {});
 
 	void OnCoroutineFinishedOrCancelled();
 
-	void ExecuteRedrawMapCoroutine();
+	void ExecuteRedrawMapCoroutine(bool bRedrawEntirely);
 
 	void RegisterMenuButton() const;
 
@@ -335,8 +337,13 @@ protected:
 	TQuadTree<int32> CurrentBuildingQuadTree{ FBox2D{ { WEST_BOUND_CENTIMETERS, NORTH_BOUND_CENTIMETERS }, { EAST_BOUND_CENTIMETERS, SOUTH_BOUND_CENTIMETERS } } };
 
 	bool IsPendingRedraw = false;
+	bool IsPendingRedrawEntire = false;
 	TArray<FBuildingData> PendingAddBuildingData;
 	TArray<FBuildingData> PendingRemoveBuildingData;
+
+	bool IsRedrawingEntirely = false;
+	FBox2D RedrawArea;
+	std::array<uint32, 4> ScissorArea;
 
 	bool IsInWorld = false;
     bool IsClient = false;
@@ -387,15 +394,25 @@ const T* UCartographGameInstanceModule::GetDataByBuildableClass(const TMap<TSoft
 }
 
 
+template<typename T>
+concept IsFVector = std::is_same_v<T, FVector> || std::is_same_v<T, FVector2D>;
 
-template<typename T, typename U>
-	requires
-	(std::is_same_v<T, FVector> || std::is_same_v<T, FVector2D>) &&
-	(std::is_same_v<U, FVector> || std::is_same_v<U, FVector2D>)
+
+template<IsFVector T, IsFVector U>
 FVector2D world_position_to_screen_position(const T& WorldPosition, const U& Size)
 {
 	return FVector2D{
 		ORIGIN_UV[0] + (WorldPosition.X - Size.X / 2) / MAP_WIDTH_CENTIMETERS,
 		ORIGIN_UV[1] + (WorldPosition.Y - Size.Y / 2) / MAP_HEIGHT_CENTIMETERS
 	} * RENDER_TEXTURE_SIZE;
+}
+
+
+template<IsFVector T>
+FVector2D screen_position_to_world_position(const T& ScreenPosition)
+{
+    return FVector2D{
+        (ScreenPosition.X / RENDER_TEXTURE_SIZE - ORIGIN_UV[0]) * MAP_WIDTH_CENTIMETERS,
+        (ScreenPosition.Y / RENDER_TEXTURE_SIZE - ORIGIN_UV[1]) * MAP_HEIGHT_CENTIMETERS
+    };
 }

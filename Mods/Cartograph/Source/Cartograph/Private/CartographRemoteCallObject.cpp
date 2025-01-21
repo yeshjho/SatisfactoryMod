@@ -155,5 +155,5 @@ UE5Coro::TCoroutine<> UCartographRemoteCallObject::InitialBuildableDeserialize(F
     CARTO_LOG("InitialBuildableDeserialize Finished, %d", SerializeNum);
     
     UCartographGameInstanceModule::Instance->IsInitializing = false;
-    UCartographGameInstanceModule::Instance->RedrawMap();
+    UCartographGameInstanceModule::Instance->RedrawMap(true);
 }

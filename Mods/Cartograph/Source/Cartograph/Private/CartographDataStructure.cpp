@@ -514,7 +514,7 @@ void FBuildingData::FillInHashAndCache(TSubclassOf<AFGBuildable> BuildableClass)
 }
 
 
-constexpr float BoxExpansionCentimeters = 200;
+constexpr float BoxExpansionCentimeters = 300;
 
 
 void FBuildingData::FillInVisualBoxCache(TSubclassOf<AFGBuildable> OriginalBuildableClass)
