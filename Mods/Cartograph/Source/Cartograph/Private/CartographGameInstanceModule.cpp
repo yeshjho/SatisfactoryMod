@@ -1,7 +1,5 @@
 #include "CartographGameInstanceModule.h"
 
-#include <numeric>
-
 #include "AssetRegistryModule.h"
 #include "CanvasItem.h"
 #include "CanvasPanelSlot.h"
@@ -712,16 +710,21 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 	TArray<int32> BuildingsToDraw;
 	if (IsRedrawingEntirely)
 	{
-        BuildingsToDraw.SetNum(Max - Min);
-        std::iota(BuildingsToDraw.begin(), BuildingsToDraw.end(), Min);
+        BuildingsToDraw.Reserve(Max - Min);
+        for (int32 i = Min; i < Max; i++)
+        {
+			BuildingsToDraw.Add(i);
+        }
 	}
 	else
 	{
 		CurrentBuildingQuadTree.GetElements(RedrawArea, BuildingsToDraw);
 		co_await Budget;
 
-        std::transform(BuildingsToDraw.begin(), BuildingsToDraw.end(), BuildingsToDraw.begin(), 
-			[this](int32 Index) { return BuildingDataIndexRedirector[Index]; });
+        for (int32& Index : BuildingsToDraw)
+        {
+            Index = BuildingDataIndexRedirector[Index];
+        }
 		Algo::Sort(BuildingsToDraw);
         co_await Budget;
 
