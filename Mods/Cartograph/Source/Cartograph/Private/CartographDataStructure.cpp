@@ -252,8 +252,12 @@ void FBuildingData::AddExtraData(AFGBuildable* Buildable)
 			.SplinePoints = std::move(SplinePoints),
 		};
 
-		if (const FSplineData* SplineData = UCartographGameInstanceModule::Instance->BuildableSplineDataMap.Find(BuildableClass.Get());
-			!SplineData)
+		const FSplineData* SplineData = UCartographGameInstanceModule::Instance->BuildableSplineDataMap.Find(BuildableClass.Get());
+        if (!SplineData && UCartographGameInstanceModule::Instance->ModdedBuildings.Contains(BuildableClass.Get()))
+        {
+            SplineData = &UCartographGameInstanceModule::Instance->UnspecifiedSplineData;
+        }
+		if (!SplineData)
 		{
 			CARTO_LOG_WARNING("Can't find spline data for %s", *BuildableClass->GetName());
 		}
@@ -327,6 +331,10 @@ void FBuildingData::FillInCache(TSubclassOf<AFGBuildable> OriginalBuildableClass
 		const auto& BuildableSplineDataMap = UCartographGameInstanceModule::Instance->BuildableSplineDataMap;
 
 		const FSplineData* SplineData = BuildableSplineDataMap.Find(BuildableClass.Get());
+		if (!SplineData && UCartographGameInstanceModule::Instance->ModdedBuildings.Contains(BuildableClass.Get()))
+		{
+            SplineData = &UCartographGameInstanceModule::Instance->UnspecifiedSplineData;
+		}
 		if (!SplineData)
 		{
 			CARTO_LOG_WARNING("Can't find spline data for %s", *BuildableClass->GetName());
@@ -365,6 +373,10 @@ void FBuildingData::FillInCache(TSubclassOf<AFGBuildable> OriginalBuildableClass
 		const auto& BuildableWireDataMap = UCartographGameInstanceModule::Instance->BuildableWireDataMap;
 
 		const FWireData* WireData = BuildableWireDataMap.Find(BuildableClass.Get());
+        if (!WireData && UCartographGameInstanceModule::Instance->ModdedBuildings.Contains(BuildableClass.Get()))
+        {
+            WireData = &UCartographGameInstanceModule::Instance->UnspecifiedWireData;
+        }
 		if (!WireData)
 		{
 			CARTO_LOG_WARNING("Can't find wire data for %s", *BuildableClass->GetName());
@@ -384,6 +396,10 @@ void FBuildingData::FillInCache(TSubclassOf<AFGBuildable> OriginalBuildableClass
 		const auto& BuildableWireDataMap = UCartographGameInstanceModule::Instance->BuildableWireDataMap;
 
 		const FWireData* BeamData = BuildableWireDataMap.Find(BuildableClass.Get());
+        if (!BeamData && UCartographGameInstanceModule::Instance->ModdedBuildings.Contains(BuildableClass.Get()))
+        {
+            BeamData = &UCartographGameInstanceModule::Instance->UnspecifiedWireData;
+        }
 		if (!BeamData)
 		{
 			CARTO_LOG_WARNING("Can't find beam data for %s", *BuildableClass->GetName());

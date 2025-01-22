@@ -267,9 +267,6 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Draw Data/Category Data")
 	TMap<TSubclassOf<UFGFactoryCustomizationDescriptor_Material>, FCategoryData> MaterialBuildCategoryDataOverrideMap;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Draw Data/Category Data")
-	FCategoryData UnspecifiedCategoryData;
-
 
 	UPROPERTY(EditDefaultsOnly, Category = "Draw Data/Override")
 	TMap<TSoftClassPtr<AFGBuildable>, TSoftObjectPtr<UTexture2D>> BuildableIconOverrideMap;
@@ -308,6 +305,19 @@ public:
 	TMap<TSubclassOf<UFGFactoryCustomizationDescriptor_Material>, FBuildLayerData> MaterialBuildLayerDataOverrideMap;
 
 	static constexpr const char* UnspecifiedMainCategory = "Modded";
+
+	UPROPERTY(EditDefaultsOnly, Category = "Unspecified Default Data")
+	FCategoryData UnspecifiedCategoryData;
+
+	// SegmentsConfigName should be None.
+	UPROPERTY(EditDefaultsOnly, Category = "Unspecified Default Data")
+	FSplineData UnspecifiedSplineData;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Unspecified Default Data")
+    int UnspecifiedSplineSegments;
+
+    UPROPERTY(EditDefaultsOnly, Category = "Unspecified Default Data")
+    FWireData UnspecifiedWireData;
 
 protected:
 	UPROPERTY(EditDefaultsOnly, Category = "UI")

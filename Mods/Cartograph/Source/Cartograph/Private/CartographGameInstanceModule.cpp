@@ -65,13 +65,20 @@ void UCartographGameInstanceModule::AfterSplineSegmentsModified()
 	FCartograph_ConfigStruct ConfigInstance = FCartograph_ConfigStruct::GetActiveConfig(GetWorld());
 	for (auto& [_, SplineData] : BuildableSplineDataMap)
 	{
-		const FProperty* Property = FCartograph_ConfigStruct::StaticStruct()->FindPropertyByName(SplineData.SegmentsConfigName);
-		if (!Property)
+		if (SplineData.SegmentsConfigName.IsNone())
 		{
-			CARTO_LOG_ERROR("SparsityConfigName not found: %s", *SplineData.SegmentsConfigName.ToString());
-			continue;
+            SplineData.SegmentsCached = UnspecifiedSplineSegments;
 		}
-		SplineData.SegmentsCached = *Property->ContainerPtrToValuePtr<int>(&ConfigInstance);
+		else
+		{
+			const FProperty* Property = FCartograph_ConfigStruct::StaticStruct()->FindPropertyByName(SplineData.SegmentsConfigName);
+			if (!Property)
+			{
+				CARTO_LOG_ERROR("SparsityConfigName not found: %s", *SplineData.SegmentsConfigName.ToString());
+				continue;
+			}
+			SplineData.SegmentsCached = *Property->ContainerPtrToValuePtr<int>(&ConfigInstance);
+		}
 	}
 
 	if (!IsInWorld)
