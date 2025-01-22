@@ -108,6 +108,8 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 
     CARTO_LOG("UCartographGameInstanceModule Init")
 
+    GatherBuildables();
+
 	Instance = this;
 
 
@@ -1237,6 +1239,11 @@ void UCartographGameInstanceModule::FillBuildLayerDataCache()
 
 
         const FBuildLayerData* LayerData = GetDataByBuildableClass(BuildableBuildLayerDataOverrideMap, BuildLayerDataMap, BuildableClass);
+		if (!LayerData && ModdedBuildings.Contains(BuildableClass.Get()))
+		{
+			const FString& ModName = *ModdedBuildings.Find(BuildableClass.Get());
+            LayerData = ModdedBuildLayerData.Find(ModName);
+		}
 		if (!LayerData)
 		{
             CARTO_LOG_WARNING("Can't find layer data for %s", *BuildableClass->GetName());
@@ -1341,12 +1348,8 @@ TArray<FString> UCartographGameInstanceModule::GetLayerCategoryOptions() const
 #pragma endregion
 
 
-#if WITH_EDITOR
-void UCartographGameInstanceModule::PostCDOContruct()
+void UCartographGameInstanceModule::GatherBuildables()
 {
-	// Need to redo it every time the game is updated.
-	return;
-
     ClassIDToClassPtrMap.Empty();
     ClassPtrToClassIDMap.Empty();
     ClassPtrToDescriptorDataMap.Empty();
@@ -1370,16 +1373,43 @@ void UCartographGameInstanceModule::PostCDOContruct()
 		{
 			const TSubclassOf<AFGBuildable> Class = StaticLoadClass(AFGBuildable::StaticClass(), nullptr, *AssetPath.ToString());
 			const FString Name = Class->GetName();
-			if (!AssetPath.GetPackageName().ToString().StartsWith("/Game/FactoryGame")
+			const FString PackageName = AssetPath.GetPackageName().ToString();
+			if (PackageName.StartsWith("/Script")
 				|| Name.StartsWith("SKEL_") || Name.StartsWith("REINST_"))
 			{
 				continue;
 			}
 
+			if (!PackageName.StartsWith("/Game/"))
+			{
+				const int32 Index = PackageName.Find(TEXT("/"), ESearchCase::IgnoreCase, ESearchDir::FromStart, 2);
+				const FString ModName = PackageName.Mid(1, Index - 1);
+				ModdedBuildings.Add(Class.Get(), ModName);
+				FLayerCategoryData* ModdedCategory = LayerCategories.FindByPredicate(
+					[](const FLayerCategoryData& CategoryData) { return CategoryData.Name == UnspecifiedMainCategory; });
+				CARTO_LOG_ERROR_RETURN_IF_NULL(ModdedCategory);
+                if (!ModdedCategory->SubCategories.FindByPredicate(
+					[ModFName = FName{ ModName }](const FLayerSubCategoryData& CategoryData) { return CategoryData.Name == ModFName; }))
+                {
+                    ModdedCategory->SubCategories.Add(FLayerSubCategoryData{
+                        .Name = FName{ ModName },
+                        .DisplayName = FText::FromString(ModName),
+						});
+                }
+
+				if (!ModdedBuildLayerData.Contains(ModName))
+				{
+					ModdedBuildLayerData.Add(ModName, FBuildLayerData{
+						.MainCategoryCache = FName{ UnspecifiedMainCategory },
+						.SubCategoryCache = FName{ ModName },
+						});
+				}
+			}
+
 			const uint32 Hash = TextKeyUtil::HashString(AssetPath.ToString());
 			ClassPtrToClassIDMap.Add(Class, Hash);
 			ClassIDToClassPtrMap.Add(Hash, Class);
-			CARTO_LOG("Path: %s, Class: %s, Hash: %u", *AssetPath.ToString(), *Name, Hash);
+			CARTO_LOG_DEBUG("Path: %s, Class: %s, Hash: %u", *AssetPath.ToString(), *Name, Hash);
 		}
 	}
 	{
@@ -1401,7 +1431,8 @@ void UCartographGameInstanceModule::PostCDOContruct()
 		{
 			const TSubclassOf<UFGBuildingDescriptor> Descriptor = StaticLoadClass(UFGBuildingDescriptor::StaticClass(), nullptr, *AssetPath.ToString());
 			const FString Name = Descriptor->GetName();
-			if (!AssetPath.GetPackageName().ToString().StartsWith("/Game/FactoryGame")
+			const FString PackageName = AssetPath.GetPackageName().ToString();
+			if (PackageName.StartsWith("/Script")
 				|| Name.StartsWith("SKEL_") || Name.StartsWith("REINST_"))
 			{
 				continue;
@@ -1419,7 +1450,6 @@ void UCartographGameInstanceModule::PostCDOContruct()
 			{
                 if (!SubCategory)
                 {
-                    CARTO_LOG("SubCategory is null: %s", *Name);
                     continue;
                 }
 
@@ -1443,15 +1473,16 @@ void UCartographGameInstanceModule::PostCDOContruct()
 				.Icon = Icon,
             });
 			
-            CARTO_LOG("Path: %s, Class: %s, BuildableClass: %s, Icon: %d",
+			CARTO_LOG_DEBUG("Path: %s, Class: %s, BuildableClass: %s, NoIcon: %d",
 				*AssetPath.ToString(), 
 				*Name, 
 				*BuildableClass->GetName(),
 				Icon == nullptr);
 		}
 	}
+
+    CARTO_LOG("Buildables Gathered. Buildable: %d, Descriptor: %d", ClassPtrToClassIDMap.Num(), ClassPtrToDescriptorDataMap.Num());
 }
-#endif
 
 
 #undef LOCTEXT_NAMESPACE

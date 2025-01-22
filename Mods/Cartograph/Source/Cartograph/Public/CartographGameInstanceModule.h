@@ -149,7 +149,7 @@ struct FBuildLayerData
 };
 
 
-// RecipeManager::Get doesn't work for clients, CDO->Subcategory/Category/Icon is unreliable so caching these.
+// RecipeManager::Get doesn't work for clients
 USTRUCT()
 struct FBuildingDescriptorData
 {
@@ -220,9 +220,7 @@ private:
 	void OnBuildingDataAdd(const FBuildingData& AddedBuildingData, int32 Pos);
     void OnBuildingDataRemove(const FBuildingData& RemovedBuildingData, int32 Pos);
 
-#if WITH_EDITOR
-	virtual void PostCDOContruct() override;
-#endif
+	void GatherBuildables();
 
 	// For blueprint use only
 private:
@@ -248,14 +246,16 @@ public:
 	FRuntimeConfig RuntimeConfig;
 
 #pragma region Static Data
-	// Made it editable since it doesn't get cleared properly sometimes.
-	UPROPERTY(EditDefaultsOnly, Category = "Generated Data")
+	UPROPERTY()  // Generated Data
     TMap<uint32, TSubclassOf<AFGBuildable>> ClassIDToClassPtrMap;
-	UPROPERTY(EditDefaultsOnly, Category = "Generated Data")
+	UPROPERTY()  // Generated Data
     TMap<TSubclassOf<AFGBuildable>, uint32> ClassPtrToClassIDMap;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Generated Data")
+	UPROPERTY()  // Generated Data
 	TMap<TSubclassOf<AFGBuildable>, FBuildingDescriptorData> ClassPtrToDescriptorDataMap;
+
+	TMap<TSoftClassPtr<AFGBuildable>, FString> ModdedBuildings;
+    TMap<FString, FBuildLayerData> ModdedBuildLayerData;
 
 
 	UPROPERTY(EditDefaultsOnly, Category = "Draw Data/Category Data")
@@ -266,6 +266,9 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, Category = "Draw Data/Category Data")
 	TMap<TSubclassOf<UFGFactoryCustomizationDescriptor_Material>, FCategoryData> MaterialBuildCategoryDataOverrideMap;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Draw Data/Category Data")
+	FCategoryData UnspecifiedCategoryData;
 
 
 	UPROPERTY(EditDefaultsOnly, Category = "Draw Data/Override")
@@ -303,6 +306,8 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, Category = "Layer Data")
 	TMap<TSubclassOf<UFGFactoryCustomizationDescriptor_Material>, FBuildLayerData> MaterialBuildLayerDataOverrideMap;
+
+	static constexpr const char* UnspecifiedMainCategory = "Modded";
 
 protected:
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
