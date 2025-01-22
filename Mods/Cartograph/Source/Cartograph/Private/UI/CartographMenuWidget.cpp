@@ -73,7 +73,7 @@ void UCartographMenuWidget::InitializeLayers()
     const auto& BuildableClassRedirectMap = UCartographGameInstanceModule::Instance->BuildableClassRedirectMap;
     for (const auto& [BuildableClass, _] : UCartographGameInstanceModule::Instance->ClassPtrToClassIDMap)
     {
-	    if (!BuildableClass)
+	    if (!BuildableClass || UCartographGameInstanceModule::Instance->BuildableToIgnore.Contains(BuildableClass.Get()))
 	    {
             continue;
 	    }

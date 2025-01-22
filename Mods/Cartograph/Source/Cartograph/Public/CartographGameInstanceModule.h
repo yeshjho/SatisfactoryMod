@@ -288,6 +288,9 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Default")
 	TMap<TSoftClassPtr<AFGBuildable>, TSoftClassPtr<AFGBuildable>> BuildableClassRedirectMap;
 
+    UPROPERTY(EditDefaultsOnly, Category = "Default")
+	TSet<TSoftClassPtr<AFGBuildable>> BuildableToIgnore;
+
 
 	UPROPERTY(EditDefaultsOnly, Category = "Layer Data")
 	TArray<FLayerCategoryData> LayerCategories;
@@ -379,7 +382,7 @@ const T* UCartographGameInstanceModule::GetDataByBuildableClass(const TMap<TSoft
 		const FBuildingDescriptorData* DescriptorData = ClassPtrToDescriptorDataMap.Find(BuildableClass);
 		if (!DescriptorData)
 		{
-			UE_LOG(LogCartograph, Warning, TEXT("Can't find descriptor data for %s"), *BuildableClass->GetName());
+			CARTO_LOG_WARNING("Can't find descriptor data for %s", *BuildableClass->GetName());
 			return nullptr;
 		}
 

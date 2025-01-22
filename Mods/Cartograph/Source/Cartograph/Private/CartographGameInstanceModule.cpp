@@ -195,6 +195,11 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 				return;
 			}
 
+			if (BuildableToIgnore.Contains(BuildableClass.Get()))
+			{
+				return;
+			}
+
 			FBuildingData Data{
 					.Transform = BuildableInstanceData.Transform,
 					//.CustomizationData = BuildableInstanceData.CustomizationData,
@@ -218,6 +223,11 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 				return;
 			}
 
+			if (BuildableToIgnore.Contains(BuildableClass.Get()))
+			{
+				return;
+			}
+
 			FBuildingData Data{
 					.Transform = ReplicationData.Transform,
 					//.CustomizationData = ReplicationData.CustomizationData,
@@ -235,6 +245,11 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 			CARTO_LOG_VERBOSE("AddBuildable: %s, Skip: %d", *Buildable->GetClass()->GetName(), ShouldInitialize || IsClient);
 
 			if (ShouldInitialize || IsClient || !GIsRunning)
+			{
+				return;
+			}
+
+			if (BuildableToIgnore.Contains(Buildable->GetClass()))
 			{
 				return;
 			}
@@ -261,6 +276,11 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 				return;
 			}
 
+			if (BuildableToIgnore.Contains(BuildableClass.Get()))
+			{
+				return;
+			}
+
 			const FRuntimeBuildableInstanceData* LightweightData = ClassInstance->GetRuntimeDataForBuildableClassAndIndex(BuildableClass, Index);
 
 			FBuildingData Data{
@@ -281,6 +301,11 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 			CARTO_LOG_VERBOSE("RemoveBuildable: %s, Skip: %d", *Buildable->GetClass()->GetName(), ShouldInitialize || IsClient);
 
 			if (ShouldInitialize || IsClient || !GIsRunning)
+			{
+				return;
+			}
+
+			if (BuildableToIgnore.Contains(Buildable->GetClass()))
 			{
 				return;
 			}
@@ -521,7 +546,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
 
 	for (const TWeakObjectPtr<AFGBuildable>& Factory : Factories)
 	{
-		if (!Factory.IsValid())
+		if (!Factory.IsValid() || BuildableToIgnore.Contains(Factory->GetClass()))
 		{
 			continue;
 		}
@@ -543,6 +568,11 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
 
 	for (const auto& [Type, Arr] : Buildings)
 	{
+        if (BuildableToIgnore.Contains(Type.Get()))
+        {
+            continue;
+        }
+
 		for (const FRuntimeBuildableInstanceData& InstanceData : Arr)
 		{
 			FBuildingData NewBuildingData{
@@ -1190,7 +1220,7 @@ void UCartographGameInstanceModule::FillBuildLayerDataCache()
 
 	for (const auto& [OriginalBuildableClass, _] : ClassPtrToClassIDMap)
 	{
-		if (!OriginalBuildableClass)
+		if (!OriginalBuildableClass || BuildableToIgnore.Contains(OriginalBuildableClass.Get()))
 		{
 			continue;
 		}
@@ -1413,10 +1443,11 @@ void UCartographGameInstanceModule::PostCDOContruct()
 				.Icon = Icon,
             });
 			
-            CARTO_LOG("Path: %s, Class: %s, BuildableClass: %s",
+            CARTO_LOG("Path: %s, Class: %s, BuildableClass: %s, Icon: %d",
 				*AssetPath.ToString(), 
 				*Name, 
-				*BuildableClass->GetName());
+				*BuildableClass->GetName(),
+				Icon == nullptr);
 		}
 	}
 }
