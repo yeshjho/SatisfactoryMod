@@ -106,6 +106,8 @@ struct FBuildingData
 
 	void CalculateSplinePoints();  // Call it after filling in the extra data & cache
     void FillInSplineVisualBoxCache();  // Call it after filling in the extra data & cache
+
+	static FVector2D GetBuildingSize(TSubclassOf<AFGBuildable> BuildableClass);
 };
 
 

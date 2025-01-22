@@ -1,5 +1,7 @@
 #include "CartographDataStructure.h"
 
+#include "Engine/InheritableComponentHandler.h"
+
 #include "FGBuildable.h"
 #include "FGBuildableBeam.h"
 #include "FGBuildableWire.h"
@@ -398,25 +400,12 @@ void FBuildingData::FillInCache(TSubclassOf<AFGBuildable> OriginalBuildableClass
 	}
 	else
 	{
-		auto& BuildableSizeOverrideMap = UCartographGameInstanceModule::Instance->BuildableSizeOverrideMap;
-		FVector2D* Size = BuildableSizeOverrideMap.Find(BuildableClass.Get());
-		if (!Size)
-		{
-			const FBox ClearanceBox = Cast<AFGBuildable>(BuildableClass->ClassDefaultObject)->GetCombinedClearanceBox();
-			if (!ClearanceBox.IsValid)
-			{
-				CARTO_LOG_WARNING("Can't find size for %s", *BuildableClass->GetName());
-				return;
-			}
-
-			FVector2D ClearanceBoxSize{ ClearanceBox.GetSize() };
-			Size = &ClearanceBoxSize;
-		}
-		if (Size->X == 0.f || Size->Y == 0.f)  // We don't need to draw, so don't even bother initializing the data cache.
+		FVector2D Size = GetBuildingSize(BuildableClass);
+		if (Size.X == 0.f || Size.Y == 0.f)  // We don't need to draw, so don't even bother initializing the data cache.
 		{
 			return;
 		}
-		*Size *= FVector2D{ Transform.GetScale3D() };
+		Size *= FVector2D{ Transform.GetScale3D() };
 
 		FRotator Rotation = Transform.GetRotation().Rotator();
 		auto& BuildableExtraRotationMap = UCartographGameInstanceModule::Instance->BuildableExtraRotationMap;
@@ -425,7 +414,7 @@ void FBuildingData::FillInCache(TSubclassOf<AFGBuildable> OriginalBuildableClass
 			Rotation += *ExtraRotation;
 		}
 
-		const FVector2D ScreenPosition = world_position_to_screen_position(Transform.GetLocation(), *Size);
+		const FVector2D ScreenPosition = world_position_to_screen_position(Transform.GetLocation(), Size);
 
 		auto& BuildableIconOverrideMap = UCartographGameInstanceModule::Instance->BuildableIconOverrideMap;
 		if (const TSoftObjectPtr<UTexture2D>* Texture = BuildableIconOverrideMap.Find(BuildableClass.Get());
@@ -434,7 +423,7 @@ void FBuildingData::FillInCache(TSubclassOf<AFGBuildable> OriginalBuildableClass
 			DataType = EBuildingDataType::Icon;
 			DataCache = FNormalDataCache{
 				.ScreenPosition = ScreenPosition,
-				.Size = *Size,
+				.Size = Size,
 				.Rotation = Rotation,
 				.IconOrRectangleData = *Texture,
 			};
@@ -445,6 +434,10 @@ void FBuildingData::FillInCache(TSubclassOf<AFGBuildable> OriginalBuildableClass
 				UCartographGameInstanceModule::Instance->BuildableBuildCategoryDataOverrideMap,
 				UCartographGameInstanceModule::Instance->BuildCategoryDataMap,
 				BuildableClass.Get());
+			if (!CategoryData && UCartographGameInstanceModule::Instance->ModdedBuildings.Contains(BuildableClass.Get()))
+			{
+				CategoryData = &UCartographGameInstanceModule::Instance->UnspecifiedCategoryData;
+			}
 			if (!CategoryData)
 			{
 				CARTO_LOG_WARNING("Can't find category data for %s", *BuildableClass->GetName());
@@ -455,8 +448,8 @@ void FBuildingData::FillInCache(TSubclassOf<AFGBuildable> OriginalBuildableClass
 				.CategoryData = CategoryData,
 			};
 
-			const float HalfWidth = Size->X / 2;
-			const float HalfHeight = Size->Y / 2;
+			const float HalfWidth = Size.X / 2;
+			const float HalfHeight = Size.Y / 2;
 			RectangleData.Corners[0] = { -HalfWidth, -HalfHeight, 0 };
 			RectangleData.Corners[1] = { HalfWidth, -HalfHeight, 0 };
 			RectangleData.Corners[2] = { HalfWidth, HalfHeight, 0 };
@@ -472,7 +465,7 @@ void FBuildingData::FillInCache(TSubclassOf<AFGBuildable> OriginalBuildableClass
 			DataType = EBuildingDataType::Rectangle;
 			DataCache = FNormalDataCache{
 				.ScreenPosition = ScreenPosition,
-				.Size = *Size,
+				.Size = Size,
 				.Rotation = Rotation,
 				.IconOrRectangleData = std::move(RectangleData),
 			};
@@ -550,29 +543,16 @@ void FBuildingData::FillInVisualBoxCache(TSubclassOf<AFGBuildable> OriginalBuild
 	}
 	else
 	{
-		auto& BuildableSizeOverrideMap = UCartographGameInstanceModule::Instance->BuildableSizeOverrideMap;
-		FVector2D* Size = BuildableSizeOverrideMap.Find(BuildableClass.Get());
-		if (!Size)
-		{
-			const FBox ClearanceBox = Cast<AFGBuildable>(BuildableClass->ClassDefaultObject)->GetCombinedClearanceBox();
-			if (!ClearanceBox.IsValid)
-			{
-				CARTO_LOG_WARNING("Can't find size for %s", *BuildableClass->GetName());
-				return;
-			}
-
-			FVector2D ClearanceBoxSize{ ClearanceBox.GetSize() };
-			Size = &ClearanceBoxSize;
-		}
-		if (Size->X == 0.f || Size->Y == 0.f)  // We don't need to draw, so don't even bother initializing the data cache.
+		FVector2D Size = GetBuildingSize(BuildableClass);
+		if (Size.X == 0.f || Size.Y == 0.f)  // We don't need to draw, so don't even bother initializing the data cache.
 		{
 			return;
 		}
-		*Size *= FVector2D{ Transform.GetScale3D() };
+		Size *= FVector2D{ Transform.GetScale3D() };
 
 		FVector Corners[4];
-		const float HalfWidth = Size->X / 2;
-		const float HalfHeight = Size->Y / 2;
+		const float HalfWidth = Size.X / 2;
+		const float HalfHeight = Size.Y / 2;
 		Corners[0] = { -HalfWidth, -HalfHeight, 0 };
 		Corners[1] = { HalfWidth, -HalfHeight, 0 };
 		Corners[2] = { HalfWidth, HalfHeight, 0 };
@@ -668,4 +648,92 @@ void FBuildingData::FillInSplineVisualBoxCache()
 		VisualBoxCache += EndPoint;
 	}
 	VisualBoxCache = VisualBoxCache.ExpandBy(BoxExpansionCentimeters);
+}
+
+
+FVector2D FBuildingData::GetBuildingSize(TSubclassOf<AFGBuildable> BuildableClass)
+{
+	const auto& BuildableSizeOverrideMap = UCartographGameInstanceModule::Instance->BuildableSizeOverrideMap;
+	if (const FVector2D* Size = BuildableSizeOverrideMap.Find(BuildableClass.Get()))
+	{
+		return *Size;
+	}
+
+	const AFGBuildable* CDO = Cast<AFGBuildable>(BuildableClass->ClassDefaultObject);
+	if (!CDO)
+	{
+        CARTO_LOG_ERROR("Can't find CDO for %s", *BuildableClass->GetName());
+        return {};
+	}
+
+	if (const FBox ClearanceBox = CDO->GetCombinedClearanceBox();
+		ClearanceBox.IsValid)
+	{
+		return FVector2D{ ClearanceBox.GetSize() };
+	}
+
+	FBox Box;
+
+	const auto* BlueprintGeneratedClass = Cast<UBlueprintGeneratedClass>(BuildableClass.Get());
+    while (BlueprintGeneratedClass)
+	{
+		if (const UInheritableComponentHandler* InheritableHandler = BlueprintGeneratedClass->InheritableComponentHandler)
+		{
+			TArray<UActorComponent*> Templates;
+			InheritableHandler->GetAllTemplates(Templates, true);
+			for (const UActorComponent* ComponentTemplate : Templates)
+			{
+				if (const auto* Component = Cast<USceneComponent>(ComponentTemplate))
+				{
+					Box += Component->GetLocalBounds().GetBox();
+				}
+			}
+		}
+
+		if (const USimpleConstructionScript* ConstructionScript = BlueprintGeneratedClass->SimpleConstructionScript)
+		{
+			for (const USCS_Node* Node : ConstructionScript->GetAllNodes())
+			{
+				if (!Node)
+				{
+					continue;
+				}
+
+				if (const auto* Component = Cast<USceneComponent>(Node->ComponentTemplate))
+				{
+					Box += Component->GetLocalBounds().GetBox();
+				}
+			}
+		}
+
+		BlueprintGeneratedClass = Cast<UBlueprintGeneratedClass>(BlueprintGeneratedClass->GetSuperClass());
+	}
+
+	UClass* NativeClass = BuildableClass;
+	while (NativeClass)
+	{
+		TArray<UObject*> DefaultObjectSubobjects;
+		NativeClass->GetDefaultObjectSubobjects(DefaultObjectSubobjects);
+
+		for (const UObject* DefaultSubObject : DefaultObjectSubobjects)
+		{
+			if (const auto* Component = Cast<USceneComponent>(DefaultSubObject))
+			{
+				Box += Component->GetLocalBounds().GetBox();
+			}
+		}
+
+        NativeClass = NativeClass->GetSuperClass();
+	}
+
+	if (!Box.GetSize().IsZero())
+	{
+        CARTO_LOG_DEBUG("Calculated and cached building size from CDO: %s", *BuildableClass->GetName());
+		const FVector2D Size2D{ Box.GetSize() };
+        UCartographGameInstanceModule::Instance->BuildableSizeOverrideMap.Add(BuildableClass.Get(), Size2D);
+		return Size2D;
+	}
+
+    CARTO_LOG_WARNING("Can't find size for %s", *BuildableClass->GetName());
+    return {};
 }
