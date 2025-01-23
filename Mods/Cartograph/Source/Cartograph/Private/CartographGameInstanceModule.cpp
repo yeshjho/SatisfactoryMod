@@ -1367,134 +1367,122 @@ void UCartographGameInstanceModule::GatherBuildables()
     ClassPtrToClassIDMap.Empty();
     ClassPtrToDescriptorDataMap.Empty();
 
+	for (const FTopLevelAssetPath& AssetPath : GetDerivedClassPaths(AFGBuildable::StaticClass()))
 	{
-		TArray<UClass*> NativeRootClasses;
-		NativeRootClasses.Add(AFGBuildable::StaticClass());
-		GetDerivedClasses(AFGBuildable::StaticClass(), NativeRootClasses);
-
-		TArray<FTopLevelAssetPath> NativeRootClassPaths;
-
-		Algo::TransformIf(NativeRootClasses,
-			NativeRootClassPaths,
-			[](const UClass* RootClass) { return RootClass && RootClass->HasAnyClassFlags(CLASS_Native); },
-			&UClass::GetClassPathName);
-
-		TSet<FTopLevelAssetPath> AllClassPaths;
-		IAssetRegistry::Get()->GetDerivedClassNames(NativeRootClassPaths, {}, AllClassPaths);
-
-		for (const FTopLevelAssetPath& AssetPath : AllClassPaths)
+		const TSubclassOf<AFGBuildable> Class = StaticLoadClass(AFGBuildable::StaticClass(), nullptr, *AssetPath.ToString());
+		const FString Name = Class->GetName();
+		const FString PackageName = AssetPath.GetPackageName().ToString();
+		if (PackageName.StartsWith("/Script")
+			|| Name.StartsWith("SKEL_") || Name.StartsWith("REINST_"))
 		{
-			const TSubclassOf<AFGBuildable> Class = StaticLoadClass(AFGBuildable::StaticClass(), nullptr, *AssetPath.ToString());
-			const FString Name = Class->GetName();
-			const FString PackageName = AssetPath.GetPackageName().ToString();
-			if (PackageName.StartsWith("/Script")
-				|| Name.StartsWith("SKEL_") || Name.StartsWith("REINST_"))
-			{
-				continue;
-			}
-
-			if (!PackageName.StartsWith("/Game/"))
-			{
-				const int32 Index = PackageName.Find(TEXT("/"), ESearchCase::IgnoreCase, ESearchDir::FromStart, 2);
-				const FString ModName = PackageName.Mid(1, Index - 1);
-				ModdedBuildings.Add(Class.Get(), ModName);
-				FLayerCategoryData* ModdedCategory = LayerCategories.FindByPredicate(
-					[](const FLayerCategoryData& CategoryData) { return CategoryData.Name == UnspecifiedMainCategory; });
-				CARTO_LOG_ERROR_RETURN_IF_NULL(ModdedCategory);
-                if (!ModdedCategory->SubCategories.FindByPredicate(
-					[ModFName = FName{ ModName }](const FLayerSubCategoryData& CategoryData) { return CategoryData.Name == ModFName; }))
-                {
-                    ModdedCategory->SubCategories.Add(FLayerSubCategoryData{
-                        .Name = FName{ ModName },
-                        .DisplayName = FText::FromString(ModName),
-						});
-                }
-
-				if (!ModdedBuildLayerData.Contains(ModName))
-				{
-					ModdedBuildLayerData.Add(ModName, FBuildLayerData{
-						.MainCategoryCache = FName{ UnspecifiedMainCategory },
-						.SubCategoryCache = FName{ ModName },
-						});
-				}
-			}
-
-			const uint32 Hash = TextKeyUtil::HashString(AssetPath.ToString());
-			ClassPtrToClassIDMap.Add(Class, Hash);
-			ClassIDToClassPtrMap.Add(Hash, Class);
-			CARTO_LOG_DEBUG("Path: %s, Class: %s, Hash: %u", *AssetPath.ToString(), *Name, Hash);
+			continue;
 		}
+
+		if (!PackageName.StartsWith("/Game/"))
+		{
+			const int32 Index = PackageName.Find(TEXT("/"), ESearchCase::IgnoreCase, ESearchDir::FromStart, 2);
+			const FString ModName = PackageName.Mid(1, Index - 1);
+			ModdedBuildings.Add(Class.Get(), ModName);
+			FLayerCategoryData* ModdedCategory = LayerCategories.FindByPredicate(
+				[](const FLayerCategoryData& CategoryData) { return CategoryData.Name == UnspecifiedMainCategory; });
+			CARTO_LOG_ERROR_RETURN_IF_NULL(ModdedCategory);
+            if (!ModdedCategory->SubCategories.FindByPredicate(
+				[ModFName = FName{ ModName }](const FLayerSubCategoryData& CategoryData) { return CategoryData.Name == ModFName; }))
+            {
+                ModdedCategory->SubCategories.Add(FLayerSubCategoryData{
+                    .Name = FName{ ModName },
+                    .DisplayName = FText::FromString(ModName),
+					});
+            }
+
+			if (!ModdedBuildLayerData.Contains(ModName))
+			{
+				ModdedBuildLayerData.Add(ModName, FBuildLayerData{
+					.MainCategoryCache = FName{ UnspecifiedMainCategory },
+					.SubCategoryCache = FName{ ModName },
+					});
+			}
+		}
+
+		const uint32 Hash = TextKeyUtil::HashString(AssetPath.ToString());
+		ClassPtrToClassIDMap.Add(Class, Hash);
+		ClassIDToClassPtrMap.Add(Hash, Class);
+		CARTO_LOG_DEBUG("Path: %s, Class: %s, Hash: %u", *AssetPath.ToString(), *Name, Hash);
 	}
+	for (const FTopLevelAssetPath& AssetPath : GetDerivedClassPaths(UFGBuildingDescriptor::StaticClass()))
 	{
-		TArray<UClass*> NativeRootClasses;
-		NativeRootClasses.Add(UFGBuildingDescriptor::StaticClass());
-		GetDerivedClasses(UFGBuildingDescriptor::StaticClass(), NativeRootClasses);
-
-		TArray<FTopLevelAssetPath> NativeRootClassPaths;
-
-		Algo::TransformIf(NativeRootClasses,
-			NativeRootClassPaths,
-			[](const UClass* RootClass) { return RootClass && RootClass->HasAnyClassFlags(CLASS_Native); },
-			&UClass::GetClassPathName);
-
-		TSet<FTopLevelAssetPath> AllClassPaths;
-		IAssetRegistry::Get()->GetDerivedClassNames(NativeRootClassPaths, {}, AllClassPaths);
-
-		for (const FTopLevelAssetPath& AssetPath : AllClassPaths)
+		const TSubclassOf<UFGBuildingDescriptor> Descriptor = StaticLoadClass(UFGBuildingDescriptor::StaticClass(), nullptr, *AssetPath.ToString());
+		const FString Name = Descriptor->GetName();
+		const FString PackageName = AssetPath.GetPackageName().ToString();
+		if (PackageName.StartsWith("/Script")
+			|| Name.StartsWith("SKEL_") || Name.StartsWith("REINST_"))
 		{
-			const TSubclassOf<UFGBuildingDescriptor> Descriptor = StaticLoadClass(UFGBuildingDescriptor::StaticClass(), nullptr, *AssetPath.ToString());
-			const FString Name = Descriptor->GetName();
-			const FString PackageName = AssetPath.GetPackageName().ToString();
-			if (PackageName.StartsWith("/Script")
-				|| Name.StartsWith("SKEL_") || Name.StartsWith("REINST_"))
-			{
-				continue;
-			}
-
-			auto* DescriptorInstance = Cast<UFGBuildingDescriptor>(Descriptor->ClassDefaultObject);
-			TSubclassOf<AFGBuildable> BuildableClass = DescriptorInstance->mBuildableClass;
-			if (!BuildableClass)
-			{
-				continue;
-			}
-
-			TSubclassOf<UFGBuildSubCategory> BuildSubCategory;
-			for (const TSubclassOf<UFGCategory> SubCategory : DescriptorInstance->mSubCategories)
-			{
-                if (!SubCategory)
-                {
-                    continue;
-                }
-
-				if (SubCategory->IsChildOf(UFGBuildSubCategory::StaticClass()))
-				{
-					BuildSubCategory = SubCategory;
-					break;
-				}
-			}
-
-            UTexture2D* Icon = DescriptorInstance->mSmallIcon;
-			if (!Icon)
-			{
-                // Some buildings like blueprint designers don't have small icon
-				Icon = DescriptorInstance->mPersistentBigIcon;
-			}
-
-            ClassPtrToDescriptorDataMap.Add(BuildableClass, FBuildingDescriptorData{
-				.Category = DescriptorInstance->mCategory,
-				.SubCategory = BuildSubCategory,
-				.Icon = Icon,
-            });
-			
-			CARTO_LOG_DEBUG("Path: %s, Class: %s, BuildableClass: %s, NoIcon: %d",
-				*AssetPath.ToString(), 
-				*Name, 
-				*BuildableClass->GetName(),
-				Icon == nullptr);
+			continue;
 		}
+
+		auto* DescriptorInstance = Cast<UFGBuildingDescriptor>(Descriptor->ClassDefaultObject);
+		TSubclassOf<AFGBuildable> BuildableClass = DescriptorInstance->mBuildableClass;
+		if (!BuildableClass)
+		{
+			continue;
+		}
+
+		TSubclassOf<UFGBuildSubCategory> BuildSubCategory;
+		for (const TSubclassOf<UFGCategory> SubCategory : DescriptorInstance->mSubCategories)
+		{
+            if (!SubCategory)
+            {
+                continue;
+            }
+
+			if (SubCategory->IsChildOf(UFGBuildSubCategory::StaticClass()))
+			{
+				BuildSubCategory = SubCategory;
+				break;
+			}
+		}
+
+        UTexture2D* Icon = DescriptorInstance->mSmallIcon;
+		if (!Icon)
+		{
+            // Some buildings like blueprint designers don't have small icon
+			Icon = DescriptorInstance->mPersistentBigIcon;
+		}
+
+        ClassPtrToDescriptorDataMap.Add(BuildableClass, FBuildingDescriptorData{
+			.Category = DescriptorInstance->mCategory,
+			.SubCategory = BuildSubCategory,
+			.Icon = Icon,
+        });
+		
+		CARTO_LOG_DEBUG("Path: %s, Class: %s, BuildableClass: %s, NoIcon: %d",
+			*AssetPath.ToString(), 
+			*Name, 
+			*BuildableClass->GetName(),
+			Icon == nullptr);
 	}
 
     CARTO_LOG("Buildables Gathered. Buildable: %d, Descriptor: %d", ClassPtrToClassIDMap.Num(), ClassPtrToDescriptorDataMap.Num());
+}
+
+
+TSet<FTopLevelAssetPath> UCartographGameInstanceModule::GetDerivedClassPaths(UClass* ParentClass)
+{
+	TArray<UClass*> NativeRootClasses;
+	NativeRootClasses.Add(ParentClass);
+	GetDerivedClasses(ParentClass, NativeRootClasses);
+
+	TArray<FTopLevelAssetPath> NativeRootClassPaths;
+
+	Algo::TransformIf(NativeRootClasses,
+		NativeRootClassPaths,
+		[](const UClass* RootClass) { return RootClass && RootClass->HasAnyClassFlags(CLASS_Native); },
+		&UClass::GetClassPathName);
+
+	TSet<FTopLevelAssetPath> AllClassPaths;
+	IAssetRegistry::Get()->GetDerivedClassNames(NativeRootClassPaths, {}, AllClassPaths);
+
+	return AllClassPaths;
 }
 
 

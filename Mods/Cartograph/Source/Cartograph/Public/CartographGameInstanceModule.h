@@ -222,6 +222,8 @@ private:
 
 	void GatherBuildables();
 
+	static TSet<FTopLevelAssetPath> GetDerivedClassPaths(UClass* ParentClass);
+
 	// For blueprint use only
 private:
 	UFUNCTION()
@@ -303,6 +305,7 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, Category = "Layer Data")
 	TMap<TSubclassOf<UFGFactoryCustomizationDescriptor_Material>, FBuildLayerData> MaterialBuildLayerDataOverrideMap;
+
 
 	static constexpr const char* UnspecifiedMainCategory = "Modded";
 
