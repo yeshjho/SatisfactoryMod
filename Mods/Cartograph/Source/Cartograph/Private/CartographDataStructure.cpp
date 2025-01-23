@@ -519,8 +519,7 @@ constexpr float BoxExpansionCentimeters = 300;
 
 void FBuildingData::FillInVisualBoxCache(TSubclassOf<AFGBuildable> OriginalBuildableClass)
 {
-	VisualBoxCache = {};
-	VisualBoxCache.bIsValid = false;
+	VisualBoxCache = FBox2D{ ForceInit };
 
 	const auto& BuildableClassRedirectMap = UCartographGameInstanceModule::Instance->BuildableClassRedirectMap;
 	const TSoftClassPtr<AFGBuildable>* RedirectClass = BuildableClassRedirectMap.Find(OriginalBuildableClass.Get());
@@ -587,7 +586,10 @@ void FBuildingData::FillInVisualBoxCache(TSubclassOf<AFGBuildable> OriginalBuild
 		}
 	}
 
-	VisualBoxCache = VisualBoxCache.ExpandBy(BoxExpansionCentimeters);
+	if (VisualBoxCache.bIsValid)
+	{
+		VisualBoxCache = VisualBoxCache.ExpandBy(BoxExpansionCentimeters);
+	}
 }
 
 
@@ -651,13 +653,12 @@ void FBuildingData::CalculateSplinePoints()
 
 void FBuildingData::FillInSplineVisualBoxCache()
 {
+	VisualBoxCache = FBox2D{ ForceInit };
+
 	FSplineDataCache* SplineDataCachePtr = std::get_if<FSplineDataCache>(&DataCache);
 	CARTO_LOG_ERROR_RETURN_IF_NULL(SplineDataCachePtr);
 
 	auto& [SplineData, StartPoints, EndPoints] = *SplineDataCachePtr;
-
-	VisualBoxCache = {};
-	VisualBoxCache.bIsValid = false;
 
 	for (const FVector2D& StartPoint : StartPoints)
 	{
