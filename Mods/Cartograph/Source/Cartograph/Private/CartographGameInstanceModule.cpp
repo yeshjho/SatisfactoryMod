@@ -639,7 +639,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 		{
 	        CARTO_LOG_DEBUG("AddedBuilding: %u", AddedBuildingData.BuildableClassHash);
 
-			if (!IsRedrawingEntirely)
+			if (!IsRedrawingEntirely && AddedBuildingData.VisualBoxCache.bIsValid)
 			{
 				RedrawArea += AddedBuildingData.VisualBoxCache;
 			}
@@ -662,7 +662,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 	        {
 	            if (RemovedBuildingData == CurrentBuildingData[i])
 	            {
-					if (!IsRedrawingEntirely)
+					if (!IsRedrawingEntirely && CurrentBuildingData[i].VisualBoxCache.bIsValid)
 					{
 						RedrawArea += CurrentBuildingData[i].VisualBoxCache;
 					}
@@ -1275,15 +1275,18 @@ void UCartographGameInstanceModule::FillBuildLayerDataCache()
 
 void UCartographGameInstanceModule::OnBuildingDataAdd(const FBuildingData& AddedBuildingData, int32 Pos)
 {
-	CurrentBuildingQuadTree.Insert(BuildingDataIndexRedirector.Num(), AddedBuildingData.VisualBoxCache);
-	for (int32& Index : BuildingDataIndexRedirector)
+	if (AddedBuildingData.VisualBoxCache.bIsValid)
 	{
-		if (Index >= Pos)
+		CurrentBuildingQuadTree.Insert(BuildingDataIndexRedirector.Num(), AddedBuildingData.VisualBoxCache);
+		for (int32& Index : BuildingDataIndexRedirector)
 		{
-			Index++;
+			if (Index >= Pos)
+			{
+				Index++;
+			}
 		}
+		BuildingDataIndexRedirector.Add(Pos);
 	}
-	BuildingDataIndexRedirector.Add(Pos);
 
 	BuildingCountMap.FindOrAdd(AddedBuildingData.BuildableClassHash)++;
 }
@@ -1291,20 +1294,23 @@ void UCartographGameInstanceModule::OnBuildingDataAdd(const FBuildingData& Added
 
 void UCartographGameInstanceModule::OnBuildingDataRemove(const FBuildingData& RemovedBuildingData, int32 Pos)
 {
-    const int32 Num = BuildingDataIndexRedirector.Num();
-    for (int32 i = 0; i < Num; i++)
-    {
-		int32& BuildingDataArrayIndex = BuildingDataIndexRedirector[i];
-	    if (BuildingDataArrayIndex == Pos)
-	    {
-			CurrentBuildingQuadTree.Remove(i, RemovedBuildingData.VisualBoxCache);
-            BuildingDataArrayIndex = -1;
-	    }
-		else if (BuildingDataArrayIndex > Pos)
+	if (RemovedBuildingData.VisualBoxCache.bIsValid)
+	{
+		const int32 Num = BuildingDataIndexRedirector.Num();
+		for (int32 i = 0; i < Num; i++)
 		{
-			BuildingDataArrayIndex--;
+			int32& BuildingDataArrayIndex = BuildingDataIndexRedirector[i];
+			if (BuildingDataArrayIndex == Pos)
+			{
+				CurrentBuildingQuadTree.Remove(i, RemovedBuildingData.VisualBoxCache);
+				BuildingDataArrayIndex = -1;
+			}
+			else if (BuildingDataArrayIndex > Pos)
+			{
+				BuildingDataArrayIndex--;
+			}
 		}
-    }
+	}
 
 	BuildingCountMap.FindChecked(RemovedBuildingData.BuildableClassHash)--;
 }
