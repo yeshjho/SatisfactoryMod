@@ -32,7 +32,7 @@ public:
 		delete Data;
 	}
 
-	// WTF... Replacing it with casting
+	// Replacing it with casting...
 	/**
 	* FCanvasBatchedElementRenderItem instance accessor
 	*
