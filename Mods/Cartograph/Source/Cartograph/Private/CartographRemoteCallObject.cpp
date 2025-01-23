@@ -37,7 +37,7 @@ void UCartographRemoteCallObject::ServerRequestInitialBuildingData_Implementatio
     case EInitialDataSendPhase::Initial:
     {
         CARTO_LOG_ERROR_RETURN_IF_NULL(UCartographGameInstanceModule::Instance);
-        // FBufferWriter doesn't handle moving properly, don't TakeOwnership and free manually. Amazing code quality XD
+        // FBufferWriter doesn't handle moving properly, don't TakeOwnership and free manually.
         // Another warning: FBufferWriter ignores FName
         FBufferWriter Archive{ nullptr, 0, EBufferWriterFlags::AllowResize };
 

@@ -88,7 +88,7 @@ struct FBuildingData
 	EBuildingDataType DataType = EBuildingDataType::Invalid;
 	std::variant<FNormalDataCache, FSplineDataCache, const struct FWireData*> DataCache;
 	const struct FBuildLayerData* LayerDataCache = nullptr;
-	FBox2D VisualBoxCache;
+	FBox2D VisualBoxCache{ ForceInit };
 
 
 	bool NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess);

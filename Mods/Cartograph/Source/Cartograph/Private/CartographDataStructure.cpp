@@ -216,6 +216,7 @@ bool FBuildingData::NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSucce
 
 	if (Ar.IsLoading())
 	{
+		VisualBoxCache = FBox2D{ ForceInit };
 		if (const TSubclassOf<AFGBuildable>* Class = UCartographGameInstanceModule::Instance->ClassIDToClassPtrMap.Find(BuildableClassHash))
 		{
 			FillInCache(*Class);
