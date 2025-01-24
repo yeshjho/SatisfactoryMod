@@ -744,7 +744,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
         co_return;
     }
 
-	CARTO_LOG_DEBUG("From %d to %d out of %d", Min, Max, CurrentBuildingData.Num());
+	CARTO_LOG("From %d to %d out of %d", Min, Max, CurrentBuildingData.Num());
 
 	TArray<int32> BuildingsToDraw;
 	if (IsRedrawingEntirely)
