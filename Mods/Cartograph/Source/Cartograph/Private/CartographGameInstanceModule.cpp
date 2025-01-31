@@ -23,6 +23,7 @@
 #include "FGSaveSession.h"
 #include "FGSplineBuildableInterface.h"
 
+#include "ModLoadingLibrary.h"
 #include "Patching/BlueprintHookHelper.h"
 #include "Patching/BlueprintHookManager.h"
 #include "Patching/NativeHookManager.h"
@@ -103,7 +104,14 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 	switch (Phase)
 	{
 	case ELifecyclePhase::CONSTRUCTION:
+	{
+        FModInfo ModInfo;
+		if (GetGameInstance()->GetSubsystem<UModLoadingLibrary>()->GetLoadedModInfo("Cartograph", ModInfo))
+		{
+            CARTO_LOG("Cartograph Version: %s", *ModInfo.Version.ToString());
+		}
 		return;
+	}
 
 	case ELifecyclePhase::INITIALIZATION:
 		RegisterMenuButton();
