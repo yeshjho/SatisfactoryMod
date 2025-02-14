@@ -55,8 +55,9 @@ constexpr bool DRAW_BOUNDARIES = false;
 #define CARTO_LOG_VERBOSE(format, ...) if constexpr (ENABLE_VERBOSE_LOG) UE_LOG(LogCartograph, Display, TEXT(format) __VA_OPT__(, __VA_ARGS__))
 #define CARTO_LOG_VERY_VERBOSE(format, ...) if constexpr (ENABLE_VERY_VERBOSE_LOG) UE_LOG(LogCartograph, Display, TEXT(format) __VA_OPT__(, __VA_ARGS__))
 
-#define CARTO_LOG_ERROR_RETURN_IF_NULL(ptr) if (!ptr) { CARTO_LOG_ERROR("'%s' is null", TEXT(#ptr)); return; }
-#define CARTO_LOG_ERROR_BREAK_IF_NULL(ptr) if (!ptr) { CARTO_LOG_ERROR("'%s' is null", TEXT(#ptr)); break; }
+#define CARTO_LOG_ERROR_DO_IF_NULL(ptr, action) if (!ptr) { CARTO_LOG_ERROR("'%s' is null", TEXT(#ptr)); action; }
+#define CARTO_LOG_ERROR_RETURN_IF_NULL(ptr) CARTO_LOG_ERROR_DO_IF_NULL(ptr, return)
+#define CARTO_LOG_ERROR_BREAK_IF_NULL(ptr) CARTO_LOG_ERROR_DO_IF_NULL(ptr, break)
 
 
 USTRUCT()
@@ -221,6 +222,7 @@ private:
     void OnBuildingDataRemove(const FBuildingData& RemovedBuildingData, int32 Pos);
 
 	void GatherBuildables();
+	void GatherModOverrides();
 
 	static TSet<FTopLevelAssetPath> GetDerivedClassPaths(UClass* ParentClass);
 
@@ -240,6 +242,19 @@ private:
 
 	UFUNCTION()
 	TArray<FString> GetLayerCategoryOptions() const;
+
+
+	template<typename T>
+	void FillInMatchingProperties(const FProperty* StructPropertyToCompare, TArray<std::pair<const FProperty*, const FProperty*>>& Out);
+
+	template<typename KeyType, typename ValueType>
+	void ProcessOverrideData(TMap<KeyType, ValueType>& MapToBeOverriden, UClass* OverrideDataClass, FName PropertyName);
+
+	template<typename T>
+	void ProcessOverrideData(TSet<T>& MapToBeOverriden, UClass* OverrideDataClass, FName PropertyName);
+
+	template<typename T>
+	void ProcessOverrideData(TArray<T>& ArrayToBeOverriden, UClass* OverrideDataClass, FName PropertyName);
 
 
 public:

@@ -1,4 +1,4 @@
-#include "CartographGameInstanceModule.h"
+﻿#include "CartographGameInstanceModule.h"
 
 #include "AssetRegistryModule.h"
 #include "CanvasItem.h"
@@ -124,6 +124,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
     CARTO_LOG("UCartographGameInstanceModule Init")
 
     GatherBuildables();
+	GatherModOverrides();
 
 	Instance = this;
 
@@ -1269,6 +1270,11 @@ void UCartographGameInstanceModule::FillBuildLayerDataCache()
 		{
 			TArray<FString> CategoryNames;
 			LayerData->Category.ParseIntoArray(CategoryNames, TEXT("/"));
+            if (CategoryNames.Num() == 0)
+            {
+                CARTO_LOG_ERROR("Invalid Category: %s", *LayerData->Category);
+                continue;
+            }
 
 			const_cast<FBuildLayerData*>(LayerData)->MainCategoryCache = FName{ CategoryNames[0] };
 			const_cast<FBuildLayerData*>(LayerData)->SubCategoryCache = CategoryNames.Num() > 1 ? FName{ CategoryNames[1] } : NAME_None;
@@ -1471,6 +1477,285 @@ void UCartographGameInstanceModule::GatherBuildables()
 	}
 
     CARTO_LOG("Buildables Gathered. Buildable: %d, Descriptor: %d", ClassPtrToClassIDMap.Num(), ClassPtrToDescriptorDataMap.Num());
+}
+
+
+template<typename T>
+concept HasStaticStruct = requires
+{
+	T::StaticStruct();
+};
+
+
+template<typename T>
+void UCartographGameInstanceModule::FillInMatchingProperties(const FProperty* StructPropertyToCompare, TArray<std::pair<const FProperty*, const FProperty*>>& Out)
+{
+	static_assert(HasStaticStruct<T>);
+
+	const auto* StructProperty = CastField<FStructProperty>(StructPropertyToCompare);
+	if (!StructProperty)
+	{
+		CARTO_LOG_ERROR("Property type should be a struct!");
+		return;
+	}
+
+	for (TFieldIterator<FProperty> PropertyIt{ T::StaticStruct(), EFieldIteratorFlags::IncludeSuper }; PropertyIt; ++PropertyIt)
+	{
+		// FindPropertyByName doesn't work here, they're stored as like "Category_2_1FC60E30497F81318BD45A8E6799F144"
+		const FProperty* OverrideStructProperty = StructProperty->Struct->CustomFindProperty(PropertyIt->GetFName());
+		if (!OverrideStructProperty)
+		{
+			continue;
+		}
+		CARTO_LOG("Found struct property: %s", *OverrideStructProperty->GetName());
+
+		if (!OverrideStructProperty->SameType(*PropertyIt))
+		{
+			CARTO_LOG_ERROR("Struct property type is wrong");
+			continue;
+		}
+
+		Out.Add({ *PropertyIt, OverrideStructProperty });
+	}
+}
+
+
+template<typename KeyType, typename ValueType>
+void UCartographGameInstanceModule::ProcessOverrideData(TMap<KeyType, ValueType>& MapToBeOverriden, UClass* OverrideDataClass, FName PropertyName)
+{
+	const FProperty* ThisProperty = GetClass()->FindPropertyByName(PropertyName);
+	CARTO_LOG_ERROR_RETURN_IF_NULL(ThisProperty);
+
+	const auto* ThisMapProperty = CastField<const FMapProperty>(ThisProperty);
+	CARTO_LOG_ERROR_RETURN_IF_NULL(ThisMapProperty);
+
+
+	const FProperty* Property = OverrideDataClass->FindPropertyByName(PropertyName);
+	if (!Property)
+	{
+		return;
+	}
+
+    CARTO_LOG("Found Property: %s", *PropertyName.ToString());
+
+	const auto* MapProperty = CastField<const FMapProperty>(Property);
+	if (!MapProperty)
+	{
+		CARTO_LOG_ERROR("It should be a map!");
+		return;
+	}
+
+	if (!MapProperty->KeyProp->SameType(ThisMapProperty->KeyProp))
+	{
+        CARTO_LOG_ERROR("Key type is wrong");
+        return;
+	}
+
+    TArray<std::pair<const FProperty*, const FProperty*>> MatchingValueStructProperties;
+    if constexpr (!HasStaticStruct<ValueType>)
+    {
+        if (!MapProperty->ValueProp->SameType(ThisMapProperty->ValueProp))
+        {
+            CARTO_LOG_ERROR("Value type is wrong");
+            return;
+        }
+    }
+	else
+	{
+        FillInMatchingProperties<ValueType>(MapProperty->ValueProp, MatchingValueStructProperties);
+		if (MatchingValueStructProperties.Num() == 0)
+		{
+			return;
+		}
+	}
+
+
+	UObject* CDO = OverrideDataClass->ClassDefaultObject;
+	CARTO_LOG_ERROR_RETURN_IF_NULL(CDO);
+	MapProperty->WithScriptMap(Property->ContainerPtrToValuePtr<void>(CDO),
+		[this, MapProperty, &MatchingValueStructProperties, &MapToBeOverriden](auto* OverrideMap)
+		{
+			const int32 Num = OverrideMap->Num();
+			for (int32 i = 0; i < Num; i++)
+			{
+				const uint8* KeyPtr = static_cast<uint8*>(OverrideMap->GetData(i, MapProperty->MapLayout));
+				const uint8* ValuePtr = KeyPtr + MapProperty->MapLayout.ValueOffset;
+
+				const KeyType& Key = *reinterpret_cast<const KeyType*>(KeyPtr);
+				ValueType& OverrideValue = MapToBeOverriden.FindOrAdd(Key);
+
+				if constexpr (!HasStaticStruct<ValueType>)
+				{
+                    OverrideValue = *reinterpret_cast<const ValueType*>(ValuePtr);
+				}
+				else
+				{
+                    for (const auto [OriginalStructProperty, OverrideStructProperty] : MatchingValueStructProperties)
+                    {
+                        auto* StructPropertyValue = OverrideStructProperty->ContainerPtrToValuePtr<void>(ValuePtr);
+                        OverrideStructProperty->CopyCompleteValue(OriginalStructProperty->ContainerPtrToValuePtr<void>(&OverrideValue), StructPropertyValue);
+                    }
+				}
+			}
+            CARTO_LOG("Added %d elements", Num);
+		}
+	);
+}
+
+
+template<typename T>
+void UCartographGameInstanceModule::ProcessOverrideData(TSet<T>& SetToBeOverriden, UClass* OverrideDataClass, FName PropertyName)
+{
+	static_assert(!HasStaticStruct<T>, "Didn't bother to implement");
+
+	const FProperty* ThisProperty = GetClass()->FindPropertyByName(PropertyName);
+	CARTO_LOG_ERROR_RETURN_IF_NULL(ThisProperty);
+
+	const auto* ThisSetProperty = CastField<const FSetProperty>(ThisProperty);
+	CARTO_LOG_ERROR_RETURN_IF_NULL(ThisSetProperty);
+
+
+	const FProperty* Property = OverrideDataClass->FindPropertyByName(PropertyName);
+	if (!Property)
+	{
+		return;
+	}
+
+	CARTO_LOG("Found Property: %s", *PropertyName.ToString());
+
+	const auto* SetProperty = CastField<const FSetProperty>(Property);
+	if (!SetProperty)
+	{
+		CARTO_LOG_ERROR("It should be a set!");
+		return;
+	}
+
+	if (!SetProperty->ElementProp->SameType(ThisSetProperty->ElementProp))
+	{
+		CARTO_LOG_ERROR("Element type is wrong");
+		return;
+	}
+
+
+	UObject* CDO = OverrideDataClass->ClassDefaultObject;
+	CARTO_LOG_ERROR_RETURN_IF_NULL(CDO);
+	void* OverrideSet = Property->ContainerPtrToValuePtr<void>(CDO);
+	const int32 Num = SetProperty->GetNum(OverrideSet);
+    for (int32 i = 0; i < Num; i++)
+    {
+        const uint8* ElementPtr = SetProperty->GetElementPtr(OverrideSet, i);
+        const T& Element = *reinterpret_cast<const T*>(ElementPtr);
+        SetToBeOverriden.Add(Element);
+    }
+    CARTO_LOG("Added %d elements", Num);
+}
+
+
+template<typename T>
+void UCartographGameInstanceModule::ProcessOverrideData(TArray<T>& ArrayToBeOverriden, UClass* OverrideDataClass, FName PropertyName)
+{
+    static_assert(HasStaticStruct<T>, "Didn't bother to implement");
+
+	const FProperty* ThisProperty = GetClass()->FindPropertyByName(PropertyName);
+	CARTO_LOG_ERROR_RETURN_IF_NULL(ThisProperty);
+
+	const auto* ThisArrayProperty = CastField<const FArrayProperty>(ThisProperty);
+	CARTO_LOG_ERROR_RETURN_IF_NULL(ThisArrayProperty);
+
+
+	const FProperty* Property = OverrideDataClass->FindPropertyByName(PropertyName);
+	if (!Property)
+	{
+		return;
+	}
+
+	CARTO_LOG("Found Property: %s", *PropertyName.ToString());
+
+	const auto* ArrayProperty = CastField<const FArrayProperty>(Property);
+	if (!ArrayProperty)
+	{
+		CARTO_LOG_ERROR("It should be an array!");
+		return;
+	}
+
+	if (!ArrayProperty->Inner->SameType(ThisArrayProperty->Inner))
+	{
+		CARTO_LOG_ERROR("Element type is wrong");
+		return;
+	}
+
+	TArray<std::pair<const FProperty*, const FProperty*>> MatchingValueStructProperties;
+    FillInMatchingProperties<T>(ArrayProperty->Inner, MatchingValueStructProperties);
+	if (MatchingValueStructProperties.Num() == 0)
+	{
+		return;
+	}
+
+	UObject* CDO = OverrideDataClass->ClassDefaultObject;
+	CARTO_LOG_ERROR_RETURN_IF_NULL(CDO);
+    void* OverrideArray = Property->ContainerPtrToValuePtr<void>(CDO);
+	const int32 Num = ArrayProperty->ArrayDim;
+    for (int32 i = 0; i < Num; i++)
+    {
+		const void* ElementPtr = ArrayProperty->GetValueAddressAtIndex_Direct(ArrayProperty->Inner, OverrideArray, i);
+        const T& Element = *static_cast<const T*>(ElementPtr);
+        ArrayToBeOverriden.Add(Element);
+    }
+    CARTO_LOG("Appended %d elements", Num);
+}
+
+
+void UCartographGameInstanceModule::GatherModOverrides()
+{
+	TArray<FAssetData> OverrideAssetArray;
+	const FName OverrideDataFileName{ "CartographOverrideData" };
+
+	TBaseStructure<FVector>::Get();
+	TBaseStructure<FCategoryData>::Get();
+
+	FARFilter Filter;
+	Filter.ClassPaths.Add(UBlueprint::StaticClass()->GetClassPathName());
+	IAssetRegistry::Get()->EnumerateAssets(Filter,
+		[&OverrideAssetArray, &OverrideDataFileName](const FAssetData& Asset)
+		{
+			if (Asset.AssetName == OverrideDataFileName)
+			{
+				OverrideAssetArray.Add(Asset);
+			}
+
+			return true;
+		});
+
+#define VAR(x) std::make_pair(std::ref(x), FName{ #x })
+	const auto OverrideableVariables = std::make_tuple(
+		VAR(BuildCategoryDataMap), VAR(BuildableBuildCategoryDataOverrideMap), VAR(MaterialBuildCategoryDataOverrideMap),
+		VAR(BuildableIconOverrideMap), VAR(BuildableSizeOverrideMap), VAR(BuildableExtraRotationMap),
+		VAR(BuildableSplineDataMap), VAR(BuildableWireDataMap),
+		VAR(BuildableClassRedirectMap), VAR(BuildableToIgnore),
+		VAR(LayerCategories), VAR(BuildLayerDataMap), VAR(BuildableBuildLayerDataOverrideMap), VAR(MaterialBuildLayerDataOverrideMap));
+#undef VAR
+
+
+	for (const FAssetData& OverrideAssetData : OverrideAssetArray)
+	{
+		CARTO_LOG("Override Data Found: %s", *OverrideAssetData.PackageName.ToString());
+
+		const FString OverrideDataClassName = OverrideAssetData.GetObjectPathString() + TEXT("_C");
+		UClass* OverrideDataClass = LoadObject<UClass>(nullptr, *OverrideDataClassName);
+		CARTO_LOG_ERROR_DO_IF_NULL(OverrideDataClass, continue);
+
+		const auto LambdaProcessOverrideData =
+			[this, OverrideDataClass, &OverrideableVariables]<size_t Index>()
+			{
+				auto& [VariableRef, Name] = std::get<Index>(OverrideableVariables);
+				ProcessOverrideData(VariableRef, OverrideDataClass, Name);
+			};
+
+		[&LambdaProcessOverrideData]<size_t ...Index>(std::index_sequence<Index...>)
+		{
+			(LambdaProcessOverrideData.template operator()<Index>(), ...);
+		}(std::make_index_sequence<std::tuple_size_v<decltype(OverrideableVariables)>>{});
+	}
 }
 
 
