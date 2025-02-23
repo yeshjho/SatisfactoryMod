@@ -253,8 +253,7 @@ private:
 	template<typename T>
 	void ProcessOverrideData(TSet<T>& MapToBeOverriden, UClass* OverrideDataClass, FName PropertyName);
 
-	template<typename T>
-	void ProcessOverrideData(TArray<T>& ArrayToBeOverriden, UClass* OverrideDataClass, FName PropertyName);
+	void ProcessLayerCategoriesOverride(UClass* OverrideDataClass);
 
 
 public:

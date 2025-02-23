@@ -1507,7 +1507,7 @@ void UCartographGameInstanceModule::FillInMatchingProperties(const FProperty* St
 		{
 			continue;
 		}
-		CARTO_LOG("Found struct property: %s", *OverrideStructProperty->GetName());
+		CARTO_LOG("Found struct property: %s", *OverrideStructProperty->GetAuthoredName());
 
 		if (!OverrideStructProperty->SameType(*PropertyIt))
 		{
@@ -1590,7 +1590,7 @@ void UCartographGameInstanceModule::ProcessOverrideData(TMap<KeyType, ValueType>
 				}
 				else
 				{
-                    for (const auto [OriginalStructProperty, OverrideStructProperty] : MatchingValueStructProperties)
+                    for (const auto& [OriginalStructProperty, OverrideStructProperty] : MatchingValueStructProperties)
                     {
                         auto* StructPropertyValue = OverrideStructProperty->ContainerPtrToValuePtr<void>(ValuePtr);
                         OverrideStructProperty->CopyCompleteValue(OriginalStructProperty->ContainerPtrToValuePtr<void>(&OverrideValue), StructPropertyValue);
@@ -1651,25 +1651,22 @@ void UCartographGameInstanceModule::ProcessOverrideData(TSet<T>& SetToBeOverride
 }
 
 
-template<typename T>
-void UCartographGameInstanceModule::ProcessOverrideData(TArray<T>& ArrayToBeOverriden, UClass* OverrideDataClass, FName PropertyName)
+void UCartographGameInstanceModule::ProcessLayerCategoriesOverride(UClass* OverrideDataClass)
 {
-    static_assert(HasStaticStruct<T>, "Didn't bother to implement");
-
-	const FProperty* ThisProperty = GetClass()->FindPropertyByName(PropertyName);
+	const FProperty* ThisProperty = GetClass()->FindPropertyByName("LayerCategories");
 	CARTO_LOG_ERROR_RETURN_IF_NULL(ThisProperty);
 
 	const auto* ThisArrayProperty = CastField<const FArrayProperty>(ThisProperty);
 	CARTO_LOG_ERROR_RETURN_IF_NULL(ThisArrayProperty);
 
 
-	const FProperty* Property = OverrideDataClass->FindPropertyByName(PropertyName);
+	const FProperty* Property = OverrideDataClass->FindPropertyByName("LayerCategories");
 	if (!Property)
 	{
 		return;
 	}
 
-	CARTO_LOG("Found Property: %s", *PropertyName.ToString());
+	CARTO_LOG("Found Property: LayerCategories");
 
 	const auto* ArrayProperty = CastField<const FArrayProperty>(Property);
 	if (!ArrayProperty)
@@ -1678,30 +1675,84 @@ void UCartographGameInstanceModule::ProcessOverrideData(TArray<T>& ArrayToBeOver
 		return;
 	}
 
-	if (!ArrayProperty->Inner->SameType(ThisArrayProperty->Inner))
+	const auto* StructProperty = CastField<FStructProperty>(ArrayProperty->Inner);
+	if (!StructProperty)
 	{
-		CARTO_LOG_ERROR("Element type is wrong");
+		CARTO_LOG_ERROR("Property type should be a struct!");
 		return;
 	}
 
 	TArray<std::pair<const FProperty*, const FProperty*>> MatchingValueStructProperties;
-    FillInMatchingProperties<T>(ArrayProperty->Inner, MatchingValueStructProperties);
+    FillInMatchingProperties<FLayerSubCategoryData>(ArrayProperty->Inner, MatchingValueStructProperties);
 	if (MatchingValueStructProperties.Num() == 0)
 	{
 		return;
 	}
 
+	const FArrayProperty* SubCategoriesArrayProperty = nullptr;
+	TArray<std::pair<const FProperty*, const FProperty*>> MatchingSubCategoriesStructProperties;
+	if (const FProperty* SubCategoriesProperty = StructProperty->Struct->CustomFindProperty("SubCategories"))
+	{
+		CARTO_LOG("Found struct property: SubCategories");
+
+        SubCategoriesArrayProperty = CastField<FArrayProperty>(SubCategoriesProperty);
+        if (!SubCategoriesArrayProperty)
+        {
+            CARTO_LOG_ERROR("It should be an array!");
+        }
+		else
+		{
+            FillInMatchingProperties<FLayerSubCategoryData>(SubCategoriesArrayProperty->Inner, MatchingSubCategoriesStructProperties);
+		}
+	}
+
+
 	UObject* CDO = OverrideDataClass->ClassDefaultObject;
 	CARTO_LOG_ERROR_RETURN_IF_NULL(CDO);
     void* OverrideArray = Property->ContainerPtrToValuePtr<void>(CDO);
-	const int32 Num = ArrayProperty->ArrayDim;
+    const int32 Num = FScriptArrayHelper{ ArrayProperty, OverrideArray }.Num();
+    CARTO_LOG("Categories: %d", Num);
     for (int32 i = 0; i < Num; i++)
     {
-		const void* ElementPtr = ArrayProperty->GetValueAddressAtIndex_Direct(ArrayProperty->Inner, OverrideArray, i);
-        const T& Element = *static_cast<const T*>(ElementPtr);
-        ArrayToBeOverriden.Add(Element);
+		void* ElementPtr = ArrayProperty->GetValueAddressAtIndex_Direct(ArrayProperty->Inner, OverrideArray, i);
+		FLayerCategoryData& OverrideValue = LayerCategories.AddDefaulted_GetRef();
+
+		for (const auto& [OriginalStructProperty, OverrideStructProperty] : MatchingValueStructProperties)
+		{
+			auto* StructPropertyValue = OverrideStructProperty->ContainerPtrToValuePtr<void>(ElementPtr);
+			OverrideStructProperty->CopyCompleteValue(OriginalStructProperty->ContainerPtrToValuePtr<void>(&OverrideValue), StructPropertyValue);
+		}
+
+		CARTO_LOG("MainCategory #%d", i);
+        CARTO_LOG("Name: %s", *OverrideValue.Name.ToString());
+        CARTO_LOG("DisplayName: %s", *OverrideValue.DisplayName.ToString());
+        CARTO_LOG("Priority: %d", OverrideValue.Priority);
+
+        if (!SubCategoriesArrayProperty)
+        {
+			continue;
+        }
+
+		void* SubCategoriesArray = SubCategoriesArrayProperty->ContainerPtrToValuePtr<void>(ElementPtr);
+        const int32 SubCategoryNum = FScriptArrayHelper{ SubCategoriesArrayProperty, SubCategoriesArray }.Num();
+		CARTO_LOG("SubCategories: %d", SubCategoryNum);
+    	for (int32 j = 0; j < SubCategoryNum; j++)
+		{
+			const void* SubCategoriesElementPtr = SubCategoriesArrayProperty->GetValueAddressAtIndex_Direct(SubCategoriesArrayProperty->Inner, SubCategoriesArray, j);
+			FLayerSubCategoryData& SubCategoryData = OverrideValue.SubCategories.AddDefaulted_GetRef();
+
+			for (const auto& [OriginalStructProperty, OverrideStructProperty] : MatchingSubCategoriesStructProperties)
+			{
+				auto* StructPropertyValue = OverrideStructProperty->ContainerPtrToValuePtr<void>(SubCategoriesElementPtr);
+				OverrideStructProperty->CopyCompleteValue(OriginalStructProperty->ContainerPtrToValuePtr<void>(&SubCategoryData), StructPropertyValue);
+			}
+
+            CARTO_LOG("SubCategory #%d", j);
+            CARTO_LOG("Name: %s", *SubCategoryData.Name.ToString());
+            CARTO_LOG("DisplayName: %s", *SubCategoryData.DisplayName.ToString());
+            CARTO_LOG("Priority: %d", SubCategoryData.Priority);
+		}
     }
-    CARTO_LOG("Appended %d elements", Num);
 }
 
 
@@ -1732,7 +1783,7 @@ void UCartographGameInstanceModule::GatherModOverrides()
 		VAR(BuildableIconOverrideMap), VAR(BuildableSizeOverrideMap), VAR(BuildableExtraRotationMap),
 		VAR(BuildableSplineDataMap), VAR(BuildableWireDataMap),
 		VAR(BuildableClassRedirectMap), VAR(BuildableToIgnore),
-		VAR(LayerCategories), VAR(BuildLayerDataMap), VAR(BuildableBuildLayerDataOverrideMap), VAR(MaterialBuildLayerDataOverrideMap));
+		/*VAR(LayerCategories),*/ VAR(BuildLayerDataMap), VAR(BuildableBuildLayerDataOverrideMap), VAR(MaterialBuildLayerDataOverrideMap));
 #undef VAR
 
 
@@ -1755,6 +1806,7 @@ void UCartographGameInstanceModule::GatherModOverrides()
 		{
 			(LambdaProcessOverrideData.template operator()<Index>(), ...);
 		}(std::make_index_sequence<std::tuple_size_v<decltype(OverrideableVariables)>>{});
+		ProcessLayerCategoriesOverride(OverrideDataClass);
 	}
 }
 
