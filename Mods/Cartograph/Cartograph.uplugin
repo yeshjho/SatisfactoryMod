@@ -25,7 +25,7 @@
 		{
 			"Name": "SML",
 			"Enabled": true,
-			"SemVersion": "^3.9.0"
+			"SemVersion": "^3.10.0"
 		}
 	],
 	"SemVersion": "0.9.1",
