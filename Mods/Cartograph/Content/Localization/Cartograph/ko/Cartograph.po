@@ -3,14 +3,112 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: Cartograph\n"
-"POT-Creation-Date: 2025-01-02 11:31\n"
-"PO-Revision-Date: 2025-01-02 11:31\n"
+"POT-Creation-Date: 2025-03-06 03:28\n"
+"PO-Revision-Date: 2025-03-06 03:28\n"
 "Language-Team: \n"
 "Language: ko\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
+
+#. Key:	1A9169FC4A5EAC4985A9F3BBE1426A91
+#. SourceLocation:	/Cartograph/Cartograph_Config.Default__Cartograph_Config_C.DisplayName
+#: /Cartograph/Cartograph_Config.Default__Cartograph_Config_C.DisplayName
+msgctxt ",1A9169FC4A5EAC4985A9F3BBE1426A91"
+msgid "Cartograph"
+msgstr ""
+
+#. Key:	EEC78ED4462D440551FEC3A411789B5E
+#. SourceLocation:	/Cartograph/Cartograph_Config.Default__Cartograph_Config_C:BP_ConfigPropertySection_C_0.BP_ConfigPropertyFloat_C_0.DisplayName
+#: /Cartograph/Cartograph_Config.Default__Cartograph_Config_C:BP_ConfigPropertySection_C_0.BP_ConfigPropertyFloat_C_0.DisplayName
+msgctxt ",EEC78ED4462D440551FEC3A411789B5E"
+msgid "Initialize Time Budget"
+msgstr "초기화 작업 시간 허용치"
+
+#. Key:	8127403948FA84279358CCBA2D1967F6
+#. SourceLocation:	/Cartograph/Cartograph_Config.Default__Cartograph_Config_C:BP_ConfigPropertySection_C_0.BP_ConfigPropertyFloat_C_0.Tooltip
+#: /Cartograph/Cartograph_Config.Default__Cartograph_Config_C:BP_ConfigPropertySection_C_0.BP_ConfigPropertyFloat_C_0.Tooltip
+msgctxt ",8127403948FA84279358CCBA2D1967F6"
+msgid "Allowed work time in ms per tick(frame) for initialization which happens when a world is loaded. Higher = Laggier for the first few frames but Faster initialization(first map render)."
+msgstr "월드 로드 후 초기화 시 틱(프레임)당 허용되는 작업 시간 (단위: ms). 값이 높을수록 처음 몇 프레임의 랙이 심해지지만 초기화(첫 맵 렌더링)가 더 빨라집니다."
+
+#. Key:	3CDD6E7546489FF5AC430489672FE7E1
+#. SourceLocation:	/Cartograph/Cartograph_Config.Default__Cartograph_Config_C:BP_ConfigPropertySection_C_0.BP_ConfigPropertyFloat_C_1.DisplayName
+#: /Cartograph/Cartograph_Config.Default__Cartograph_Config_C:BP_ConfigPropertySection_C_0.BP_ConfigPropertyFloat_C_1.DisplayName
+msgctxt ",3CDD6E7546489FF5AC430489672FE7E1"
+msgid "Redraw Time Budget"
+msgstr "맵 갱신 작업 시간 허용치"
+
+#. Key:	B30F0F4541A5E10BE9D87886CF39197C
+#. SourceLocation:	/Cartograph/Cartograph_Config.Default__Cartograph_Config_C:BP_ConfigPropertySection_C_0.BP_ConfigPropertyFloat_C_1.Tooltip
+#: /Cartograph/Cartograph_Config.Default__Cartograph_Config_C:BP_ConfigPropertySection_C_0.BP_ConfigPropertyFloat_C_1.Tooltip
+msgctxt ",B30F0F4541A5E10BE9D87886CF39197C"
+msgid "Allowed work time in ms per tick(frame) for redrawing which happens when a building is newly built/dismantled. Higher = Laggier when buildings are built/dismantled but Faster redraw."
+msgstr "건물이 새로 지어지거나 철거됐을 때 맵 갱신 시 틱(프레임)당 허용되는 작업 시간 (단위: ms). 값이 높을수록 건물이 새로 지어지거나 철거됐을 때 랙이 심해지지만 갱신이 더 빨라집니다."
+
+#. Key:	A12C5ECD455392FCDAC56393D7E11C4A
+#. SourceLocation:	/Cartograph/Cartograph_Config.Default__Cartograph_Config_C:BP_ConfigPropertySection_C_0.BP_ConfigPropertyInteger_C_0.DisplayName
+#: /Cartograph/Cartograph_Config.Default__Cartograph_Config_C:BP_ConfigPropertySection_C_0.BP_ConfigPropertyInteger_C_0.DisplayName
+msgctxt ",A12C5ECD455392FCDAC56393D7E11C4A"
+msgid "Conveyor Belt Spline Segments"
+msgstr "컨베이어 벨트 곡선 정확도"
+
+#. Key:	F1BB0A0F4805AC94F4C9A3A36D54087D
+#. SourceLocation:	/Cartograph/Cartograph_Config.Default__Cartograph_Config_C:BP_ConfigPropertySection_C_0.BP_ConfigPropertyInteger_C_0.Tooltip
+#: /Cartograph/Cartograph_Config.Default__Cartograph_Config_C:BP_ConfigPropertySection_C_0.BP_ConfigPropertyInteger_C_0.Tooltip
+msgctxt ",F1BB0A0F4805AC94F4C9A3A36D54087D"
+msgid "Higher = More accurate conveyor belt splines but Slower redraw."
+msgstr "높을수록 컨베이어 벨트 곡선의 정확도가 높아지지만 렌더링이 느려집니다."
+
+#. Key:	94FD80774536D03422083F8AE4E8DE37
+#. SourceLocation:	/Cartograph/Cartograph_Config.Default__Cartograph_Config_C:BP_ConfigPropertySection_C_0.BP_ConfigPropertyInteger_C_1.DisplayName
+#: /Cartograph/Cartograph_Config.Default__Cartograph_Config_C:BP_ConfigPropertySection_C_0.BP_ConfigPropertyInteger_C_1.DisplayName
+msgctxt ",94FD80774536D03422083F8AE4E8DE37"
+msgid "Pipeline Spline Segments"
+msgstr "파이프 곡선 정확도"
+
+#. Key:	74929AE345C641B086DB0CB10B3F3525
+#. SourceLocation:	/Cartograph/Cartograph_Config.Default__Cartograph_Config_C:BP_ConfigPropertySection_C_0.BP_ConfigPropertyInteger_C_1.Tooltip
+#: /Cartograph/Cartograph_Config.Default__Cartograph_Config_C:BP_ConfigPropertySection_C_0.BP_ConfigPropertyInteger_C_1.Tooltip
+msgctxt ",74929AE345C641B086DB0CB10B3F3525"
+msgid "Higher = More accurate pipeline splines but Slower redraw."
+msgstr "높을수록 파이프 곡선의 정확도가 높아지지만 렌더링이 느려집니다."
+
+#. Key:	AE0F83FE4621C1AA4A40EC8910B319C4
+#. SourceLocation:	/Cartograph/Cartograph_Config.Default__Cartograph_Config_C:BP_ConfigPropertySection_C_0.BP_ConfigPropertyInteger_C_2.DisplayName
+#: /Cartograph/Cartograph_Config.Default__Cartograph_Config_C:BP_ConfigPropertySection_C_0.BP_ConfigPropertyInteger_C_2.DisplayName
+msgctxt ",AE0F83FE4621C1AA4A40EC8910B319C4"
+msgid "Railway Spline Segments"
+msgstr "철로 곡선 정확도"
+
+#. Key:	970B83BE43DB8B5458C632AC840CDAC0
+#. SourceLocation:	/Cartograph/Cartograph_Config.Default__Cartograph_Config_C:BP_ConfigPropertySection_C_0.BP_ConfigPropertyInteger_C_2.Tooltip
+#: /Cartograph/Cartograph_Config.Default__Cartograph_Config_C:BP_ConfigPropertySection_C_0.BP_ConfigPropertyInteger_C_2.Tooltip
+msgctxt ",970B83BE43DB8B5458C632AC840CDAC0"
+msgid "Higher = More accurate railway splines but Slower redraw."
+msgstr "높을수록 철로 곡선의 정확도가 높아지지만 렌더링이 느려집니다."
+
+#. Key:	10BCF0104FF7331F11346F9B95B4C079
+#. SourceLocation:	/Cartograph/Cartograph_Config.Default__Cartograph_Config_C:BP_ConfigPropertySection_C_0.BP_ConfigPropertyInteger_C_3.DisplayName
+#: /Cartograph/Cartograph_Config.Default__Cartograph_Config_C:BP_ConfigPropertySection_C_0.BP_ConfigPropertyInteger_C_3.DisplayName
+msgctxt ",10BCF0104FF7331F11346F9B95B4C079"
+msgid "Hypertube Spline Segments"
+msgstr "하이퍼튜브 곡선 정확도"
+
+#. Key:	D417954247AC645AAF5D34B909A8526E
+#. SourceLocation:	/Cartograph/Cartograph_Config.Default__Cartograph_Config_C:BP_ConfigPropertySection_C_0.BP_ConfigPropertyInteger_C_3.Tooltip
+#: /Cartograph/Cartograph_Config.Default__Cartograph_Config_C:BP_ConfigPropertySection_C_0.BP_ConfigPropertyInteger_C_3.Tooltip
+msgctxt ",D417954247AC645AAF5D34B909A8526E"
+msgid "Higher = More accurate hypertube splines but Slower rerdaw."
+msgstr "높을수록 하이퍼튜브 곡선의 정확도가 높아지지만 렌더링이 느려집니다."
+
+#. Key:	D606B3F749C4E31C9E3FB29D27D21761
+#. SourceLocation:	/Cartograph/RootInstance_Cartograph.Default__RootInstance_Cartograph_C.LayerCategories(5).LayerCategories.DisplayName
+#: /Cartograph/RootInstance_Cartograph.Default__RootInstance_Cartograph_C.LayerCategories(5).LayerCategories.DisplayName
+msgctxt ",D606B3F749C4E31C9E3FB29D27D21761"
+msgid "Modded"
+msgstr "모드"
 
 #. Key:	15A5F98F4C22223DA22291B04774FCCC
 #. SourceLocation:	/Cartograph/UI/BPW_InitializingNotification.BPW_InitializingNotification_C:WidgetTree.InitializingText.Text
@@ -34,15 +132,15 @@ msgid "Layers"
 msgstr "레이어"
 
 #. Key:	7422DF4440B76D3CF0C9A3B3246DF865
-#. SourceLocation:	/Cartograph/UI/Menu/BPW_CartographMenuLayerToggleWidget.BPW_CartographMenuLayerToggleWidget_C:ExecuteUbergraph_BPW_CartographMenuLayerToggleWidget [Script Bytecode]
-#: /Cartograph/UI/Menu/BPW_CartographMenuLayerToggleWidget.BPW_CartographMenuLayerToggleWidget_C:ExecuteUbergraph_BPW_CartographMenuLayerToggleWidget [Script Bytecode]
+#. SourceLocation:	/Cartograph/UI/Menu/BPW_CartographMenuLayerToggleWidget.BPW_CartographMenuLayerToggleWidget_C:Get_mName_Text [Script Bytecode]
+#: /Cartograph/UI/Menu/BPW_CartographMenuLayerToggleWidget.BPW_CartographMenuLayerToggleWidget_C:Get_mName_Text [Script Bytecode]
 msgctxt ",7422DF4440B76D3CF0C9A3B3246DF865"
 msgid "Enable Category"
 msgstr "카테고리 활성화"
 
 #. Key:	E7D8DD784ABEE76A875A12ACBA6842AF
-#. SourceLocation:	/Cartograph/UI/Menu/BPW_CartographMenuLayerToggleWidget.BPW_CartographMenuLayerToggleWidget_C:ExecuteUbergraph_BPW_CartographMenuLayerToggleWidget [Script Bytecode]
-#: /Cartograph/UI/Menu/BPW_CartographMenuLayerToggleWidget.BPW_CartographMenuLayerToggleWidget_C:ExecuteUbergraph_BPW_CartographMenuLayerToggleWidget [Script Bytecode]
+#. SourceLocation:	/Cartograph/UI/Menu/BPW_CartographMenuLayerToggleWidget.BPW_CartographMenuLayerToggleWidget_C:Get_mName_Text [Script Bytecode]
+#: /Cartograph/UI/Menu/BPW_CartographMenuLayerToggleWidget.BPW_CartographMenuLayerToggleWidget_C:Get_mName_Text [Script Bytecode]
 msgctxt ",E7D8DD784ABEE76A875A12ACBA6842AF"
 msgid "Disable Category"
 msgstr "카테고리 비활성화"
@@ -83,8 +181,8 @@ msgid "Show Cartograph Menu"
 msgstr "Cartograph 메뉴 표시"
 
 #. Key:	CartographMenuShow
-#. SourceLocation:	Mods/Cartograph/Source/Cartograph/Private/CartographGameInstanceModule.cpp(1389)
-#: Mods/Cartograph/Source/Cartograph/Private/CartographGameInstanceModule.cpp(1389)
+#. SourceLocation:	Mods/Cartograph/Source/Cartograph/Private/CartographGameInstanceModule.cpp(1087)
+#: Mods/Cartograph/Source/Cartograph/Private/CartographGameInstanceModule.cpp(1087)
 msgctxt "Cartograph,CartographMenuShow"
 msgid "Show Cartograph Menu"
 msgstr "Cartograph 메뉴 표시"

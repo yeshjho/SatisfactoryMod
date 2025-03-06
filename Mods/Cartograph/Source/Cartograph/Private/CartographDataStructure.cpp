@@ -1,4 +1,4 @@
-#include "CartographDataStructure.h"
+﻿#include "CartographDataStructure.h"
 
 #include "Engine/InheritableComponentHandler.h"
 
@@ -244,6 +244,7 @@ void FBuildingData::AddExtraData(AFGBuildable* Buildable)
 	{
 		const auto* Spline = Cast<IFGSplineBuildableInterface>(Buildable);
 		const USplineComponent* SplineComponent = Spline->GetSplineComponent();
+		CARTO_LOG_ERROR_RETURN_IF_NULL(SplineComponent);
 		Transform = SplineComponent->GetComponentTransform();
 
 		TArray<FVector2D> SplinePoints;
