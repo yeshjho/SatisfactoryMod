@@ -67,7 +67,7 @@ bool WidgetBlueprintHookParentValidator::ValidateIndirectChildWidget(UWidget* Wi
 }
 
 bool WidgetBlueprintHookParentValidator::ValidateParentWidget(UWidget* Widget, EWidgetBlueprintHookParentType ParentType, UPanelWidget*& OutParentWidget, bool bCheckVariableName) {
-	if (ParentType == EWidgetBlueprintHookParentType::Direct) {
+	if (ParentType == EWidgetBlueprintHookParentType::Direct || ParentType == EWidgetBlueprintHookParentType::Direct_Any) {
 		return ValidateDirectWidget(Widget, OutParentWidget, bCheckVariableName);
 	}
 	if (ParentType == EWidgetBlueprintHookParentType::Indirect_Child) {
@@ -218,7 +218,7 @@ TArray<FString> UWidgetBlueprintHookData::GetParentWidgetNames() const {
 
 	WidgetBlueprintClass->GetWidgetTreeArchetype()->ForEachWidget([&](UWidget* Widget){
 		UPanelWidget* ResultParentWidget;
-		if (WidgetBlueprintHookParentValidator::ValidateParentWidget(Widget, ParentWidgetType, ResultParentWidget, true)) {
+		if (WidgetBlueprintHookParentValidator::ValidateParentWidget(Widget, ParentWidgetType, ResultParentWidget, ParentWidgetType != EWidgetBlueprintHookParentType::Direct_Any)) {
 			ResultWidgetNames.Add(Widget->GetName());
 		}
 	});

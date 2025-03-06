@@ -26,7 +26,12 @@ enum class EWidgetBlueprintHookParentType : uint8 {
 	/** Hook directly using the parent widget name */
 	Direct UMETA(DisplayName = "Direct"),
 	/** Hook indirectly by traversing the widget hierarchy of the provided widget for the closest panel widget */
-	Indirect_Child UMETA(DisplayName = "Indirect (Child)")
+	Indirect_Child UMETA(DisplayName = "Indirect (Child)"),
+	/**
+	 * Hook directly using the parent widget name, including elements that aren't variables.
+	 * Warning: use this feature with caution as widget structure elements that aren't variables are especially prone to changing across game updates
+	 */
+	Direct_Any UMETA(DisplayName = "Direct (Any)"),
 };
 
 namespace WidgetBlueprintHookParentValidator {

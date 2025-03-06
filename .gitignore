@@ -25,6 +25,7 @@ Configs/*
 Mods/**/Metadata/Crypto.json
 !Mods/Alpakit/
 !Mods/AccessTransformers/
+!Mods/WwisePatches/
 !Mods/SML/
 !Mods/SMLEditor/
 !Mods/ExampleMod/
