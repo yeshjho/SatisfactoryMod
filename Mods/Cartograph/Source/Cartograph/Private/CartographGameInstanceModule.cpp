@@ -1,4 +1,4 @@
-﻿#include "CartographGameInstanceModule.h"
+#include "CartographGameInstanceModule.h"
 
 #include "AssetRegistryModule.h"
 #include "CanvasItem.h"
@@ -92,7 +92,7 @@ void UCartographGameInstanceModule::AfterSplineSegmentsModified()
 		BuildingData.CalculateSplinePoints();
 	}
 
-    CARTO_LOG("Spline segments modified");
+	CARTO_LOG_DEBUG("Spline segments modified");
 	RedrawMap(true);
 }
 
@@ -478,7 +478,7 @@ void UCartographGameInstanceModule::OnWorldUnloaded()
 
 void UCartographGameInstanceModule::OnLayerConfigChanged()
 {
-    CARTO_LOG("OnLayerConfigChanged");
+	CARTO_LOG_DEBUG("OnLayerConfigChanged");
 
 	RedrawMap(true);
 	SaveRuntimeConfig();
@@ -618,7 +618,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
         OnCoroutineFinishedOrCancelled();
 	};
 
-	CARTO_LOG("RedrawMapCoroutine Started. Entire: %d", bRedrawEntirely);
+	CARTO_LOG_DEBUG("RedrawMapCoroutine Started. Entire: %d", bRedrawEntirely);
 
 	const float TimeBudget = FCartograph_ConfigStruct::GetActiveConfig(GetWorld()).RedrawTimeBudget;
 	UE5Coro::Latent::FTickTimeBudget Budget = UE5Coro::Latent::FTickTimeBudget::Milliseconds(TimeBudget);
@@ -680,7 +680,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 		MinZFilter = FMath::Floor(MinCached * Length + MinHeight);
 		MaxZFilter = FMath::CeilToInt(MaxCached * Length + MinHeight);
 
-        CARTO_LOG("Buildings Change Processed");
+		CARTO_LOG_DEBUG("Buildings Change Processed");
 	}
 
 	if (FPlatformProperties::IsServerOnly())
@@ -737,7 +737,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
         co_return;
     }
 
-	CARTO_LOG("From %d to %d out of %d", Min, Max, CurrentBuildingData.Num());
+	CARTO_LOG_DEBUG("From %d to %d out of %d", Min, Max, CurrentBuildingData.Num());
 
 	TArray<int32> BuildingsToDraw;
 	if (IsRedrawingEntirely)
@@ -954,7 +954,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 	RedrawArea = {};
 	RedrawArea.bIsValid = false;
 
-	CARTO_LOG("RedrawMapCoroutine Finished");
+	CARTO_LOG_DEBUG("RedrawMapCoroutine Finished");
 }
 
 
@@ -1150,7 +1150,7 @@ void UCartographGameInstanceModule::LoadRuntimeConfig()
 		}
 	}
 
-    CARTO_LOG("RuntimeConfig Loaded");
+	CARTO_LOG_DEBUG("RuntimeConfig Loaded");
 #endif
 }
 
@@ -1208,7 +1208,7 @@ void UCartographGameInstanceModule::SaveRuntimeConfig()
         BuildingStringProperty->MarkDirty();
 	}
 
-    CARTO_LOG("RuntimeConfig Saved");
+	CARTO_LOG_DEBUG("RuntimeConfig Saved");
 #endif
 }
 

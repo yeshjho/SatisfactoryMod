@@ -1,4 +1,4 @@
-#include "CartographModSubsystem.h"
+﻿#include "CartographModSubsystem.h"
 
 
 ACartographModSubsystem::ACartographModSubsystem()
@@ -32,11 +32,11 @@ void ACartographModSubsystem::ClientUpdateBuildingData_Implementation(const TArr
 {
     if (HasAuthority())
     {
-        CARTO_LOG("Sending Update Data");
+        CARTO_LOG_DEBUG("Sending Update Data");
         return;
     }
 
-    CARTO_LOG("Received Update Data");
+    CARTO_LOG_DEBUG("Received Update Data");
 
     CARTO_LOG_ERROR_RETURN_IF_NULL(UCartographGameInstanceModule::Instance);
     UCartographGameInstanceModule::Instance->PendingAddBuildingData.Append(AddedBuildings);
