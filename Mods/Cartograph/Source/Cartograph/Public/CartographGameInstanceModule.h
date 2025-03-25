@@ -190,7 +190,7 @@ class CARTOGRAPH_API UCartographGameInstanceModule : public UGameInstanceModule
 public:
 	virtual void DispatchLifecycleEvent(ELifecyclePhase Phase) override;
 
-	void OnWorldLoaded();
+	void OnWorldLoaded(UWorld* World);
 	void OnWorldUnloaded();
 
 	void OnLayerConfigChanged();

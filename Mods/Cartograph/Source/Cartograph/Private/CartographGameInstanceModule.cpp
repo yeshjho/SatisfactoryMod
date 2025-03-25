@@ -1,4 +1,4 @@
-#include "CartographGameInstanceModule.h"
+﻿#include "CartographGameInstanceModule.h"
 
 #include "AssetRegistryModule.h"
 #include "CanvasItem.h"
@@ -164,36 +164,6 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 
 
 #pragma region Hooking
-	const auto LambdaAfterLoadGame =
-		[this](bool ReturnValue, UFGSaveSession* ClassInstance, const FString& SaveName)
-		{
-			CARTO_LOG("LoadGame");
-
-			IsClient = false;
-			ShouldInitialize = true;
-            // Wait for ACartographModSubsystem to initialize
-			GetWorld()->GetTimerManager().SetTimerForNextTick(
-				[this, ClassInstance]()
-				{
-					if (!ShouldInitialize || !GIsRunning)
-					{
-						return;
-					}
-
-					ShouldInitialize = false;
-					IsInitializing = true;
-
-					TArray<TWeakObjectPtr<AFGBuildable>> Factories;
-					Algo::Transform(AFGBuildableSubsystem::Get(ClassInstance)->GetAllBuildablesRef(), Factories,
-						[](AFGBuildable* Buildable) { return Buildable; });
-					Coroutine = InitialBuildableGather(
-						std::move(Factories),
-						AFGLightweightBuildableSubsystem::Get(ClassInstance)->mBuildableClassToInstanceArray
-					);
-				});
-		};
-
-
     const auto LambdaAfterAddFromBuildableInstanceData = 
         [this](int32 ReturnValue, AFGLightweightBuildableSubsystem* ClassInstance, TSubclassOf<AFGBuildable> BuildableClass,
             FRuntimeBuildableInstanceData& BuildableInstanceData, bool FromSaveData = false, int32 SaveDataBuildableIndex = INDEX_NONE, 
@@ -372,9 +342,6 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 
 	if (!WITH_EDITOR)
 	{
-		// Called only when single player or host
-		SUBSCRIBE_UOBJECT_METHOD_AFTER(UFGSaveSession, LoadGame, LambdaAfterLoadGame);
-
 		// Doing it after PlayerController::BeginPlay would interfere other network packets,
 	    // resulting higher chance of packet loss (due to timeout)
 		SUBSCRIBE_UOBJECT_METHOD_AFTER(AFGHUD, CloseRespawnUI, LambdaAfterCloseRespawnUI);
@@ -462,13 +429,37 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 }
 
 
-void UCartographGameInstanceModule::OnWorldLoaded()
+void UCartographGameInstanceModule::OnWorldLoaded(UWorld* World)
 {
 	CARTO_LOG("OnWorldLoaded");
 
     IsInWorld = true;
 	ShouldInitialize = true;
 	IsClient = GetWorld()->IsNetMode(NM_Client);
+
+	if (!IsClient)
+	{
+		// Wait for ACartographModSubsystem to initialize
+		GetWorld()->GetTimerManager().SetTimerForNextTick(
+			[this, World]()
+			{
+				if (!ShouldInitialize || !GIsRunning)
+				{
+					return;
+				}
+
+				ShouldInitialize = false;
+				IsInitializing = true;
+
+				TArray<TWeakObjectPtr<AFGBuildable>> Factories;
+				Algo::Transform(AFGBuildableSubsystem::Get(World)->GetAllBuildablesRef(), Factories,
+					[](AFGBuildable* Buildable) { return Buildable; });
+				Coroutine = InitialBuildableGather(
+					std::move(Factories),
+					AFGLightweightBuildableSubsystem::Get(World)->mBuildableClassToInstanceArray
+				);
+			});
+	}
 
 	if (!FPlatformProperties::IsServerOnly())
 	{

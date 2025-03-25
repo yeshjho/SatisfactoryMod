@@ -1,4 +1,4 @@
-#include "CartographGameWorldModule.h"
+﻿#include "CartographGameWorldModule.h"
 
 #include "CartographGameInstanceModule.h"
 
@@ -15,7 +15,7 @@ void UCartographGameWorldModule::DispatchLifecycleEvent(ELifecyclePhase Phase)
     CARTO_LOG("UCartographGameWorldModule Init")
 
     CARTO_LOG_ERROR_RETURN_IF_NULL(UCartographGameInstanceModule::Instance);
-    UCartographGameInstanceModule::Instance->OnWorldLoaded();
+    UCartographGameInstanceModule::Instance->OnWorldLoaded(GetWorld());
 }
 
 
