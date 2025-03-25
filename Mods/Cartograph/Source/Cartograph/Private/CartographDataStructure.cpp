@@ -1,4 +1,4 @@
-﻿#include "CartographDataStructure.h"
+#include "CartographDataStructure.h"
 
 #include "Engine/InheritableComponentHandler.h"
 
@@ -248,6 +248,7 @@ void FBuildingData::AddExtraData(AFGBuildable* Buildable)
 		Transform = SplineComponent->GetComponentTransform();
 
 		TArray<FVector2D> SplinePoints;
+        SplinePoints.Reserve(SplineComponent->SplineCurves.Position.Points.Num());
 		Algo::Transform(SplineComponent->SplineCurves.Position.Points, SplinePoints,
 			[](const FInterpCurvePoint<FVector>& Point) { return FVector2D{ Point.OutVal }; });
 		FSplineExtraData ExtraData{
@@ -308,6 +309,8 @@ void FBuildingData::AddExtraData(AFGBuildable* Buildable)
 void FBuildingData::FillInCache(TSubclassOf<AFGBuildable> OriginalBuildableClass)
 {
 	DataType = EBuildingDataType::Invalid;
+
+	CARTO_LOG_ERROR_RETURN_IF_NULL(UCartographGameInstanceModule::Instance);
 
 	const auto& BuildableClassRedirectMap = UCartographGameInstanceModule::Instance->BuildableClassRedirectMap;
 	const TSoftClassPtr<AFGBuildable>* RedirectClass = BuildableClassRedirectMap.Find(OriginalBuildableClass.Get());
@@ -496,6 +499,8 @@ void FBuildingData::FillInCache(TSubclassOf<AFGBuildable> OriginalBuildableClass
 
 void FBuildingData::FillInHash(TSubclassOf<AFGBuildable> OriginalBuildableClass)
 {
+	CARTO_LOG_ERROR_RETURN_IF_NULL(UCartographGameInstanceModule::Instance);
+
 	const auto& BuildableClassRedirectMap = UCartographGameInstanceModule::Instance->BuildableClassRedirectMap;
 	const TSoftClassPtr<AFGBuildable>* RedirectClass = BuildableClassRedirectMap.Find(OriginalBuildableClass.Get());
 	const TSubclassOf<AFGBuildable> BuildableClass = RedirectClass ? RedirectClass->LoadSynchronous() : OriginalBuildableClass.Get();
@@ -531,6 +536,8 @@ constexpr float BoxExpansionCentimeters = 300;
 void FBuildingData::FillInVisualBoxCache(TSubclassOf<AFGBuildable> OriginalBuildableClass)
 {
 	VisualBoxCache = FBox2D{ ForceInit };
+
+	CARTO_LOG_ERROR_RETURN_IF_NULL(UCartographGameInstanceModule::Instance);
 
 	const auto& BuildableClassRedirectMap = UCartographGameInstanceModule::Instance->BuildableClassRedirectMap;
 	const TSoftClassPtr<AFGBuildable>* RedirectClass = BuildableClassRedirectMap.Find(OriginalBuildableClass.Get());
@@ -672,6 +679,11 @@ void FBuildingData::FillInSplineVisualBoxCache()
 
 FVector2D FBuildingData::GetBuildingSize(TSubclassOf<AFGBuildable> BuildableClass)
 {
+	if (!UCartographGameInstanceModule::Instance)
+	{
+		return {};
+	}
+
 	const auto& BuildableSizeOverrideMap = UCartographGameInstanceModule::Instance->BuildableSizeOverrideMap;
 	if (const FVector2D* Size = BuildableSizeOverrideMap.Find(BuildableClass.Get()))
 	{

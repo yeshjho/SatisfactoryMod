@@ -1,4 +1,4 @@
-﻿#include "CartographGameInstanceModule.h"
+#include "CartographGameInstanceModule.h"
 
 #include "AssetRegistryModule.h"
 #include "CanvasItem.h"
@@ -23,6 +23,7 @@
 #include "FGSaveSession.h"
 #include "FGSplineBuildableInterface.h"
 
+#include "ConfigPropertyString.h"
 #include "ModLoadingLibrary.h"
 #include "Patching/BlueprintHookHelper.h"
 #include "Patching/BlueprintHookManager.h"
@@ -32,7 +33,6 @@
 #include "CartographModSubsystem.h"
 #include "CartographRemoteCallObject.h"
 #include "Cartograph_ConfigStruct.h"
-#include "ConfigPropertyString.h"
 
 
 #define LOCTEXT_NAMESPACE "Cartograph"
