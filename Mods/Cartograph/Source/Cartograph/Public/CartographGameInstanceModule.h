@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <array>
 
@@ -396,11 +396,14 @@ protected:
 	UPROPERTY(BlueprintReadOnly)
 	float MaxHeight = 100;
 
-	float MinCached;
-    float MaxCached;
+	float MinCached = 0;
+    float MaxCached = 0;
 
     UPROPERTY(BlueprintReadOnly)
     bool DoShowBuildings = true;
+
+	UPROPERTY(BlueprintReadOnly)
+	class UFGInteractWidget* CurrentBuildableUI = nullptr;
 };
 
 

@@ -1340,10 +1340,21 @@ void UCartographGameInstanceModule::OnShowBuildingsCheckboxChanged(bool DoShow)
     DoShowBuildings = DoShow;
     CARTO_LOG("DoShowBuildings: %d", DoShowBuildings);
 
-	auto* Player = Cast<AFGCharacterPlayer>(GetWorld()->GetFirstPlayerController()->GetCharacter());
-	CARTO_LOG_ERROR_RETURN_IF_NULL(Player);
-	FUseState UseState{};
-	IFGUseableInterface::Execute_OnUse(CurrentBuildingData[0].BuildablePtr, Player, UseState);
+	if (CurrentBuildingData.Num() == 0)
+	{
+		return;
+	}
+
+	CARTO_LOG_ERROR_RETURN_IF_NULL(CurrentBuildingData[0].BuildablePtr);
+
+	auto* HUD = GetWorld()->GetFirstPlayerController()->GetHUD<AFGHUD>();
+    CARTO_LOG_ERROR_RETURN_IF_NULL(HUD);
+	UFGInteractWidget* Widget = HUD->RequestInteractWidget(CurrentBuildingData[0].BuildablePtr->GetInteractWidgetClass(), CurrentBuildingData[0].BuildablePtr);
+	CurrentBuildableUI = Widget;
+	//auto* Player = Cast<AFGCharacterPlayer>(GetWorld()->GetFirstPlayerController()->GetCharacter());
+	//CARTO_LOG_ERROR_RETURN_IF_NULL(Player);
+	//FUseState UseState{};
+	//IFGUseableInterface::Execute_OnUse(CurrentBuildingData[0].BuildablePtr, Player, UseState);
 
 }
 
