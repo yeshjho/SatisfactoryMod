@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "CoreMinimal.h"
 
 #include <variant>
@@ -89,6 +89,8 @@ struct FBuildingData
 	std::variant<FNormalDataCache, FSplineDataCache, const struct FWireData*> DataCache;
 	const struct FBuildLayerData* LayerDataCache = nullptr;
 	FBox2D VisualBoxCache{ ForceInit };
+
+    AFGBuildable* BuildablePtr = nullptr;
 
 
 	bool NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess);

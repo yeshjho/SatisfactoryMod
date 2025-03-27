@@ -1,4 +1,4 @@
-#include "CartographDataStructure.h"
+﻿#include "CartographDataStructure.h"
 
 #include "Engine/InheritableComponentHandler.h"
 
@@ -234,6 +234,8 @@ bool FBuildingData::NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSucce
 
 void FBuildingData::AddExtraData(AFGBuildable* Buildable)
 {
+	BuildablePtr = Buildable;
+
 	CARTO_LOG_ERROR_RETURN_IF_NULL(UCartographGameInstanceModule::Instance);
 
 	const TSoftClassPtr<AFGBuildable> Class = Buildable->GetClass();

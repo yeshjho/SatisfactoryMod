@@ -1,4 +1,4 @@
-#include "CartographGameInstanceModule.h"
+﻿#include "CartographGameInstanceModule.h"
 
 #include "AssetRegistryModule.h"
 #include "CanvasItem.h"
@@ -781,7 +781,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 	for (int32 i : BuildingsToDraw)
 	{
         const auto& [ClassHash, Transform/*, CustomizationData*/, BuildableExtraData, 
-			DataType, DataCache, LayerDataCache, VisualBoxCache] = CurrentBuildingData[i];
+			DataType, DataCache, LayerDataCache, VisualBoxCache, _] = CurrentBuildingData[i];
 
 		CARTO_LOG_VERY_VERBOSE("Buildable: %u, Transform: %s", ClassHash, *Transform.ToString());
 
@@ -1339,6 +1339,12 @@ void UCartographGameInstanceModule::OnShowBuildingsCheckboxChanged(bool DoShow)
 {
     DoShowBuildings = DoShow;
     CARTO_LOG("DoShowBuildings: %d", DoShowBuildings);
+
+	auto* Player = Cast<AFGCharacterPlayer>(GetWorld()->GetFirstPlayerController()->GetCharacter());
+	CARTO_LOG_ERROR_RETURN_IF_NULL(Player);
+	FUseState UseState{};
+	IFGUseableInterface::Execute_OnUse(CurrentBuildingData[0].BuildablePtr, Player, UseState);
+
 }
 
 
