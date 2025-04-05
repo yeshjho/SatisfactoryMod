@@ -1394,6 +1394,12 @@ void UCartographGameInstanceModule::OnCycleBuildings(const FVector2D& Normalized
 	auto* HUD = GetWorld()->GetFirstPlayerController()->GetHUD<AFGHUD>();
 	CARTO_LOG_ERROR_RETURN_IF_NULL(HUD);
 	UFGInteractWidget* Widget = HUD->RequestInteractWidget(WidgetClass, BuildingData.BuildablePtr);
+	FProperty* Property = Widget->GetClass()->FindPropertyByName("mShouldOpenInventory");
+    CARTO_LOG_ERROR_RETURN_IF_NULL(Property);
+    bool* ShouldOpenInventoryPtr = Property->ContainerPtrToValuePtr<bool>(Widget);
+    CARTO_LOG_ERROR_RETURN_IF_NULL(ShouldOpenInventoryPtr);
+    CARTO_LOG("ShouldOpenInventoryPtr: %d", *ShouldOpenInventoryPtr);
+    *ShouldOpenInventoryPtr = false;
 	CurrentBuildableUI = Widget;
 }
 
