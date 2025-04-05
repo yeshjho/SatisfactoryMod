@@ -240,10 +240,14 @@ private:
 	UFUNCTION(BlueprintCallable)
 	void OnShowBuildingsCheckboxChanged(bool DoShow);
 
+	UFUNCTION(BlueprintCallable)
+	void OnCycleBuildings(const FVector2D& NormalizedScreenPosition);
+
 	UFUNCTION()
 	TArray<FString> GetLayerCategoryOptions() const;
 
 
+private:
 	template<typename T>
 	void FillInMatchingProperties(const FProperty* StructPropertyToCompare, TArray<std::pair<const FProperty*, const FProperty*>>& Out);
 
@@ -348,6 +352,9 @@ protected:
 
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UUserWidget> MenuWidget;
+
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TObjectPtr<UInputMappingContext> MapInputContext;
 #pragma endregion
 
 

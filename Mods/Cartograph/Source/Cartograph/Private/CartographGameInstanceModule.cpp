@@ -1,4 +1,4 @@
-﻿#include "CartographGameInstanceModule.h"
+#include "CartographGameInstanceModule.h"
 
 #include "AssetRegistryModule.h"
 #include "CanvasItem.h"
@@ -9,6 +9,7 @@
 #include "HorizontalBox.h"
 #include "HorizontalBoxSlot.h"
 #include "OutputDeviceNull.h"
+#include "RemoveIf.h"
 #include "WidgetBlueprintGeneratedClass.h"
 
 #include "FGLightweightBuildableSubsystem.h"
@@ -421,6 +422,17 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 
 					FOutputDeviceNull Ar;
 					Button->CallFunctionByNameWithArguments(TEXT("SetShowHideText"), Ar, nullptr, true);
+				},
+				EPredefinedHookOffset::Return);
+
+			HookManager->HookBlueprintFunction(
+				MapContainerWidget->FindFunctionByName(TEXT("SetOpenMap")),
+				[this](const FBlueprintHookHelper& Helper)
+				{
+					TSharedRef<FBlueprintHookVariableHelper_Local> VariableHelper = Helper.GetLocalVariableHelper();
+					const bool IsOpen = VariableHelper->GetBoolVariable(TEXT("OpenMap"));
+
+					Cast<AFGPlayerController>(GetWorld()->GetFirstPlayerController())->SetMappingContextBound(MapInputContext, IsOpen);
 				},
 				EPredefinedHookOffset::Return);
 		}
@@ -1339,23 +1351,50 @@ void UCartographGameInstanceModule::OnShowBuildingsCheckboxChanged(bool DoShow)
 {
     DoShowBuildings = DoShow;
     CARTO_LOG("DoShowBuildings: %d", DoShowBuildings);
+}
 
-	if (CurrentBuildingData.Num() == 0)
+
+void UCartographGameInstanceModule::OnCycleBuildings(const FVector2D& NormalizedScreenPosition)
+{
+	const FVector2D ScreenPosition = NormalizedScreenPosition * RENDER_TEXTURE_SIZE;
+	const FVector2D WorldPosition = screen_position_to_world_position(ScreenPosition);
+
+	CARTO_LOG("NormScreen: %s, Screen: %s, World: %s", *NormalizedScreenPosition.ToString(), *ScreenPosition.ToString(), *WorldPosition.ToString());
+
+	TArray<int32> IntersectingBuildings;
+	CurrentBuildingQuadTree.GetElements({ WorldPosition, WorldPosition }, IntersectingBuildings);
+
+    CARTO_LOG("IntersectingBuildings: %d", IntersectingBuildings.Num());
+
+	Algo::RemoveIf(IntersectingBuildings,
+		[this](int32 Index)
+		{
+			return CurrentBuildingData[BuildingDataIndexRedirector[Index]].BuildablePtr == nullptr;
+		});
+
+	CARTO_LOG("IntersectingBuildings 2: %d", IntersectingBuildings.Num());
+
+	if (IntersectingBuildings.Num() == 0)
 	{
 		return;
 	}
 
-	CARTO_LOG_ERROR_RETURN_IF_NULL(CurrentBuildingData[0].BuildablePtr);
+	for (int32& Index : IntersectingBuildings)
+	{
+		Index = BuildingDataIndexRedirector[Index];
+	}
+
+	const FBuildingData& BuildingData = CurrentBuildingData[IntersectingBuildings[0]];
+	const TSubclassOf<UFGInteractWidget> WidgetClass = BuildingData.BuildablePtr->GetInteractWidgetClass();
+    if (!WidgetClass)
+    {
+        return;
+    }
 
 	auto* HUD = GetWorld()->GetFirstPlayerController()->GetHUD<AFGHUD>();
-    CARTO_LOG_ERROR_RETURN_IF_NULL(HUD);
-	UFGInteractWidget* Widget = HUD->RequestInteractWidget(CurrentBuildingData[0].BuildablePtr->GetInteractWidgetClass(), CurrentBuildingData[0].BuildablePtr);
+	CARTO_LOG_ERROR_RETURN_IF_NULL(HUD);
+	UFGInteractWidget* Widget = HUD->RequestInteractWidget(WidgetClass, BuildingData.BuildablePtr);
 	CurrentBuildableUI = Widget;
-	//auto* Player = Cast<AFGCharacterPlayer>(GetWorld()->GetFirstPlayerController()->GetCharacter());
-	//CARTO_LOG_ERROR_RETURN_IF_NULL(Player);
-	//FUseState UseState{};
-	//IFGUseableInterface::Execute_OnUse(CurrentBuildingData[0].BuildablePtr, Player, UseState);
-
 }
 
 
