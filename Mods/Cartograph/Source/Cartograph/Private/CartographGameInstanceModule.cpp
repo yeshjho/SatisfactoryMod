@@ -1,4 +1,4 @@
-#include "CartographGameInstanceModule.h"
+﻿#include "CartographGameInstanceModule.h"
 
 #include "AssetRegistryModule.h"
 #include "CanvasItem.h"
@@ -41,10 +41,7 @@
 DEFINE_LOG_CATEGORY(LogCartograph);
 
 
-template<typename T, typename U>
-    requires
-		(std::is_same_v<T, FVector> || std::is_same_v<T, FVector2D>) &&
-		(std::is_same_v<U, FVector> || std::is_same_v<U, FVector2D>)
+template<IsFVector T, IsFVector U>
 void draw_line(UCanvas* Canvas, const T& WorldStart, const U& WorldEnd, const FLinearColor& Color, float Thickness)
 {
     const FVector2D StartScreenPosition = world_position_to_screen_position(WorldStart, FVector::ZeroVector);
