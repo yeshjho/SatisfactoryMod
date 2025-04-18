@@ -90,7 +90,7 @@ struct FBuildingData
 	const struct FBuildLayerData* LayerDataCache = nullptr;
 	FBox2D VisualBoxCache{ ForceInit };
 
-    AFGBuildable* BuildablePtr = nullptr;
+    TSoftObjectPtr<AFGBuildable> BuildablePtr = nullptr;
 
 
 	bool NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess);

@@ -354,6 +354,9 @@ protected:
 	TSubclassOf<UUserWidget> MenuWidget;
 
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UUserWidget> UseableBaseWidget;
+
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TObjectPtr<UInputMappingContext> MapInputContext;
 #pragma endregion
 

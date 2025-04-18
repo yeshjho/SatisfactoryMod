@@ -1,4 +1,4 @@
-#include "CartographGameInstanceModule.h"
+﻿#include "CartographGameInstanceModule.h"
 
 #include "AssetRegistryModule.h"
 #include "CanvasItem.h"
@@ -20,6 +20,7 @@
 #include "FGBuildingDescriptor.h"
 #include "FGBuildCategory.h"
 #include "FGBuildSubCategory.h"
+#include "FGGameUI.h"
 #include "FGPlayerController.h"
 #include "FGSaveSession.h"
 #include "FGSplineBuildableInterface.h"
@@ -341,6 +342,19 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
         };
 
 
+	const auto LambdaSetShowInventory =
+		[](TCallScope<void(*)(UFGGameUI*, bool)>& Scope, UFGGameUI* ClassInstance, bool doShow)
+		{
+			FDebug::DumpStackTraceToLog(TEXT("SetShowInventory"), ELogVerbosity::Type::Warning);
+		};
+
+	const auto LambdaSetWindowWantsInventoryAddon =
+		[](TCallScope<void(*)(UFGGameUI*, bool)>& Scope, UFGGameUI* ClassInstance, bool doWantAddon)
+		{
+			FDebug::DumpStackTraceToLog(TEXT("SetWindowWantsInventoryAddon"), ELogVerbosity::Type::Warning);
+		};
+
+
 	if (!WITH_EDITOR)
 	{
 		// Doing it after PlayerController::BeginPlay would interfere other network packets,
@@ -357,6 +371,9 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 		SUBSCRIBE_UOBJECT_METHOD_AFTER(AFGLightweightBuildableSubsystem, InvalidateRuntimeInstanceDataForIndex, LambdaAfterInvalidateRuntimeInstanceDataForIndex);
 
 		SUBSCRIBE_UOBJECT_METHOD_AFTER(AFGBuildableSubsystem, RemoveBuildable, LambdaAfterRemoveBuildable);
+
+		SUBSCRIBE_UOBJECT_METHOD(UFGGameUI, SetShowInventory, LambdaSetShowInventory);
+		SUBSCRIBE_UOBJECT_METHOD(UFGGameUI, SetWindowWantsInventoryAddon, LambdaSetWindowWantsInventoryAddon);
 
 
 		SUBSCRIBE_METHOD(FCanvas::GetBatchedElements,
@@ -433,6 +450,15 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 					const bool IsOpen = VariableHelper->GetBoolVariable(TEXT("OpenMap"));
 
 					Cast<AFGPlayerController>(GetWorld()->GetFirstPlayerController())->SetMappingContextBound(MapInputContext, IsOpen);
+				},
+				EPredefinedHookOffset::Return);
+
+			HookManager->HookBlueprintFunction(
+				UseableBaseWidget->FindFunctionByName(TEXT("SetInventoryVisibility")),
+				[this](const FBlueprintHookHelper& Helper)
+				{
+					TSharedRef<FBlueprintHookVariableHelper_Local> VariableHelper = Helper.GetLocalVariableHelper();
+					VariableHelper->SetBoolVariable(TEXT("Visible"), false);
 				},
 				EPredefinedHookOffset::Return);
 		}
@@ -1369,7 +1395,7 @@ void UCartographGameInstanceModule::OnCycleBuildings(const FVector2D& Normalized
 	Algo::RemoveIf(IntersectingBuildings,
 		[this](int32 Index)
 		{
-			return CurrentBuildingData[BuildingDataIndexRedirector[Index]].BuildablePtr == nullptr;
+			return !CurrentBuildingData[BuildingDataIndexRedirector[Index]].BuildablePtr.IsValid();
 		});
 
 	CARTO_LOG("IntersectingBuildings 2: %d", IntersectingBuildings.Num());
@@ -1393,13 +1419,41 @@ void UCartographGameInstanceModule::OnCycleBuildings(const FVector2D& Normalized
 
 	auto* HUD = GetWorld()->GetFirstPlayerController()->GetHUD<AFGHUD>();
 	CARTO_LOG_ERROR_RETURN_IF_NULL(HUD);
-	UFGInteractWidget* Widget = HUD->RequestInteractWidget(WidgetClass, BuildingData.BuildablePtr);
-	FProperty* Property = Widget->GetClass()->FindPropertyByName("mShouldOpenInventory");
-    CARTO_LOG_ERROR_RETURN_IF_NULL(Property);
-    bool* ShouldOpenInventoryPtr = Property->ContainerPtrToValuePtr<bool>(Widget);
-    CARTO_LOG_ERROR_RETURN_IF_NULL(ShouldOpenInventoryPtr);
-    CARTO_LOG("ShouldOpenInventoryPtr: %d", *ShouldOpenInventoryPtr);
-    *ShouldOpenInventoryPtr = false;
+	//UFGInteractWidget* Widget = HUD->RequestInteractWidget(WidgetClass, BuildingData.BuildablePtr);
+
+	UFGInteractWidget* Widget = Cast<UFGInteractWidget>(HUD->RequestWidget(WidgetClass));
+	CARTO_LOG_ERROR_RETURN_IF_NULL(Widget);
+
+	//if (const FProperty* Property = Widget->GetClass()->FindPropertyByName("mShouldOpenInventory"))
+	//{
+	//	if (bool* ShouldOpenInventoryPtr = Property->ContainerPtrToValuePtr<bool>(Widget))
+	//	{
+	//		*ShouldOpenInventoryPtr = false;
+	//	}
+	//}
+
+	/*
+    Widget->mInteractObject = BuildingData.BuildablePtr;
+	Widget->Native_Init();
+	if (Widget->NativeCanCallInit())
+	{
+		Widget->Init();
+		Widget->Keybindings.Empty();
+		Widget->bUseParentKeybindings = false;
+		Widget->bIgnoreDefaultKeybindings = true;
+		if (const FProperty* Property = Widget->GetClass()->FindPropertyByName("mShouldOpenInventory"))
+		{
+			if (bool* ShouldOpenInventoryPtr = Property->ContainerPtrToValuePtr<bool>(Widget))
+			{
+				*ShouldOpenInventoryPtr = false;
+			}
+		}
+	}
+	else
+	{
+        CARTO_LOG_ERROR("Widget can't call Init");
+	}
+	*/
 	CurrentBuildableUI = Widget;
 }
 
