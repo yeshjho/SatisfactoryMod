@@ -1365,6 +1365,12 @@ void UCartographGameInstanceModule::GatherBuildables()
 	for (const FTopLevelAssetPath& AssetPath : GetDerivedClassPaths(AFGBuildable::StaticClass()))
 	{
 		const TSubclassOf<AFGBuildable> Class = StaticLoadClass(AFGBuildable::StaticClass(), nullptr, *AssetPath.ToString());
+        if (!Class)
+        {
+            CARTO_LOG_ERROR("Failed to load class from path: %s", *AssetPath.ToString());
+            continue;
+        }
+
 		const FString Name = Class->GetName();
 		const FString PackageName = AssetPath.GetPackageName().ToString();
 		if (PackageName.StartsWith("/Script")
@@ -1380,7 +1386,7 @@ void UCartographGameInstanceModule::GatherBuildables()
 			ModdedBuildings.Add(Class.Get(), ModName);
 			FLayerCategoryData* ModdedCategory = LayerCategories.FindByPredicate(
 				[](const FLayerCategoryData& CategoryData) { return CategoryData.Name == UnspecifiedMainCategory; });
-			CARTO_LOG_ERROR_RETURN_IF_NULL(ModdedCategory);
+			CARTO_LOG_ERROR_DO_IF_NULL(ModdedCategory, continue);
             if (!ModdedCategory->SubCategories.FindByPredicate(
 				[ModFName = FName{ ModName }](const FLayerSubCategoryData& CategoryData) { return CategoryData.Name == ModFName; }))
             {
@@ -1407,6 +1413,12 @@ void UCartographGameInstanceModule::GatherBuildables()
 	for (const FTopLevelAssetPath& AssetPath : GetDerivedClassPaths(UFGBuildingDescriptor::StaticClass()))
 	{
 		const TSubclassOf<UFGBuildingDescriptor> Descriptor = StaticLoadClass(UFGBuildingDescriptor::StaticClass(), nullptr, *AssetPath.ToString());
+        if (!Descriptor)
+        {
+            CARTO_LOG_ERROR("Failed to load descriptor from path: %s", *AssetPath.ToString());
+            continue;
+        }
+
 		const FString Name = Descriptor->GetName();
 		const FString PackageName = AssetPath.GetPackageName().ToString();
 		if (PackageName.StartsWith("/Script")
@@ -1416,6 +1428,7 @@ void UCartographGameInstanceModule::GatherBuildables()
 		}
 
 		auto* DescriptorInstance = Cast<UFGBuildingDescriptor>(Descriptor->ClassDefaultObject);
+		CARTO_LOG_ERROR_DO_IF_NULL(DescriptorInstance, continue);
 		TSubclassOf<AFGBuildable> BuildableClass = DescriptorInstance->mBuildableClass;
 		if (!BuildableClass)
 		{
