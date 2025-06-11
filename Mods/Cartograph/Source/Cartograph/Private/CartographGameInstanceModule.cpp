@@ -387,41 +387,6 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 
 				Scope.Override(RenderBatch->GetBatchedElements());
 			});
-
-
-		/*
-		if (!FPlatformProperties::IsServerOnly())
-		{
-			UBlueprintHookManager* HookManager = GEngine->GetEngineSubsystem<UBlueprintHookManager>();
-			HookManager->HookBlueprintFunction(
-				MapContainerWidget->FindFunctionByName(TEXT("SetFiltersCollapsed")),
-				[](const FBlueprintHookHelper& Helper) 
-				{
-					TSharedRef<FBlueprintHookVariableHelper_Local> VariableHelper = Helper.GetLocalVariableHelper();
-					const bool IsCollapsed = VariableHelper->GetBoolVariable(TEXT("IsCollapsed"));
-					if (IsCollapsed)
-					{
-						return;
-					}
-
-					const auto* Widget = Cast<UUserWidget>(Helper.GetContext());
-					UWidget* Menu = Widget->WidgetTree->FindWidget("CartographMenu");
-					CARTO_LOG_ERROR_RETURN_IF_NULL(Menu);
-					Menu->SetVisibility(ESlateVisibility::Collapsed);
-
-					UWidget* Button = Widget->WidgetTree->FindWidget("CartographMenuShowHideButton");
-					CARTO_LOG_ERROR_RETURN_IF_NULL(Button);
-
-					FProperty* IsOpenProperty = Button->GetClass()->FindPropertyByName("IsOpen");
-                    CARTO_LOG_ERROR_RETURN_IF_NULL(IsOpenProperty);
-					*IsOpenProperty->ContainerPtrToValuePtr<bool>(Button) = false;
-
-					FOutputDeviceNull Ar;
-					Button->CallFunctionByNameWithArguments(TEXT("SetShowHideText"), Ar, nullptr, true);
-				},
-				EPredefinedHookOffset::Return);
-		}
-		*/
 	}
 #pragma endregion
 }
@@ -1353,6 +1318,24 @@ TArray<FString> UCartographGameInstanceModule::GetLayerCategoryOptions() const
 		}
 	}
 	return Options;
+}
+
+
+void UCartographGameInstanceModule::OnVanillaMapMenuShown(const UUserWidget* Widget) const
+{
+	UWidget* Menu = Widget->WidgetTree->FindWidget("CartographMenu");
+	CARTO_LOG_ERROR_RETURN_IF_NULL(Menu);
+	Menu->SetVisibility(ESlateVisibility::Collapsed);
+
+	UWidget* Button = Widget->WidgetTree->FindWidget("CartographMenuShowHideButton");
+	CARTO_LOG_ERROR_RETURN_IF_NULL(Button);
+
+	FProperty* IsOpenProperty = Button->GetClass()->FindPropertyByName("IsOpen");
+	CARTO_LOG_ERROR_RETURN_IF_NULL(IsOpenProperty);
+	*IsOpenProperty->ContainerPtrToValuePtr<bool>(Button) = false;
+
+	FOutputDeviceNull Ar;
+	Button->CallFunctionByNameWithArguments(TEXT("SetShowHideText"), Ar, nullptr, true);
 }
 #pragma endregion
 

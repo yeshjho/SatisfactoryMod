@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <array>
 
@@ -242,6 +242,9 @@ private:
 
 	UFUNCTION()
 	TArray<FString> GetLayerCategoryOptions() const;
+
+	UFUNCTION(BlueprintCallable)
+	void OnVanillaMapMenuShown(const UUserWidget* Widget) const;
 
 
 	template<typename T>
