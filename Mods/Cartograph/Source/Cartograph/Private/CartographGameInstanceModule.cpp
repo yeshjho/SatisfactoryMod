@@ -25,7 +25,6 @@
 
 #include "ConfigPropertyString.h"
 #include "ModLoadingLibrary.h"
-#include "Patching/BlueprintHookHelper.h"
 #include "Patching/BlueprintHookManager.h"
 #include "Patching/NativeHookManager.h"
 
@@ -390,6 +389,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 			});
 
 
+		/*
 		if (!FPlatformProperties::IsServerOnly())
 		{
 			UBlueprintHookManager* HookManager = GEngine->GetEngineSubsystem<UBlueprintHookManager>();
@@ -421,6 +421,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 				},
 				EPredefinedHookOffset::Return);
 		}
+		*/
 	}
 #pragma endregion
 }
@@ -1057,7 +1058,7 @@ void UCartographGameInstanceModule::RegisterMenuButton() const
 	//ShowHideButton->RemoveFromParent();  // AddChild already removes from parent
 	HBox->AddChild(ShowHideButton);
 
-	UWidget* CartographMenuShowHideButton = NewObject<UWidget>(HBox, MenuShowHideButtonWidget, "CartographMenuShowHideButton", RF_Transient, ShowHideButton);
+	UWidget* CartographMenuShowHideButton = NewObject<UWidget>(HBox, MenuShowHideButtonWidget, "CartographMenuShowHideButton", RF_Transient/*, ShowHideButton*/);
     auto* HBoxSlot = Cast<UHorizontalBoxSlot>(HBox->AddChild(CartographMenuShowHideButton));
 	HBoxSlot->SetPadding({ 10, 0, 0, 0 });
 
