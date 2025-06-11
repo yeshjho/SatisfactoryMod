@@ -181,6 +181,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 					.Transform = BuildableInstanceData.Transform,
 					//.CustomizationData = BuildableInstanceData.CustomizationData,
 			};
+			Data.AddExtraData(BuildableInstanceData.TypeSpecificData);
             Data.FillInHashAndCache(BuildableClass);
 			PendingAddBuildingData.Add(std::move(Data));
 
@@ -209,6 +210,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 					.Transform = ReplicationData.Transform,
 					//.CustomizationData = ReplicationData.CustomizationData,
 			};
+            Data.AddExtraData(ReplicationData.TypeSpecificData);
 			Data.FillInHashAndCache(BuildableClass);
 			PendingAddBuildingData.Add(std::move(Data));
 
@@ -264,6 +266,7 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 					.Transform = LightweightData->Transform,
 					//.CustomizationData = Data->CustomizationData,
 			};
+			Data.AddExtraData(LightweightData->TypeSpecificData);
 			//Data.FillInHashAndCache(BuildableClass);  // Cache are not used in comparison (==, <=>) so we don't need to fill it
 			Data.FillInHash(BuildableClass);
             PendingRemoveBuildingData.Add(std::move(Data));
@@ -544,6 +547,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
 				.Transform = InstanceData.Transform,
 				//.CustomizationData = InstanceData.CustomizationData,
 			};
+            NewBuildingData.AddExtraData(InstanceData.TypeSpecificData);
 			NewBuildingData.FillInHashAndCache(Type);
 
 			const int32 Pos = Algo::LowerBound(CurrentBuildingData, NewBuildingData);

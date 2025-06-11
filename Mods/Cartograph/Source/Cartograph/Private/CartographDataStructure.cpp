@@ -1,4 +1,4 @@
-#include "CartographDataStructure.h"
+﻿#include "CartographDataStructure.h"
 
 #include "Engine/InheritableComponentHandler.h"
 
@@ -292,13 +292,15 @@ void FBuildingData::AddExtraData(AFGBuildable* Buildable)
 
 		return;
 	}
+}
 
-	if (BuildableClass->IsChildOf(AFGBuildableBeam::StaticClass()))
+
+void FBuildingData::AddExtraData(const FFGDynamicStruct& TypeSpecificData)
+{
+	if (const auto* BeamData = TypeSpecificData.GetValuePtr<FBuildableBeamLightweightData>())
 	{
-		const auto* Beam = Cast<AFGBuildableBeam>(Buildable);
-
 		BuildableExtraData = FBeamExtraData{
-			.Length = Beam->GetLength(),
+			.Length = BeamData->BeamLength,
 		};
 
 		return;

@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "CoreMinimal.h"
 
 #include <variant>
@@ -7,6 +7,7 @@
 
 
 class AFGBuildable;
+struct FFGDynamicStruct;
 
 
 struct FSplineExtraData
@@ -98,6 +99,7 @@ struct FBuildingData
 	std::partial_ordering operator<=>(float Z) const noexcept;
 
 	void AddExtraData(AFGBuildable* Buildable);
+	void AddExtraData(const FFGDynamicStruct& TypeSpecificData);
 
 	void FillInCache(TSubclassOf<AFGBuildable> OriginalBuildableClass);  // Call it after filling in the extra data
 	void FillInHash(TSubclassOf<AFGBuildable> OriginalBuildableClass);  // Call it after filling in the extra data
