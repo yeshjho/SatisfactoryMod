@@ -165,9 +165,11 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
             FRuntimeBuildableInstanceData& BuildableInstanceData, bool FromSaveData = false, int32 SaveDataBuildableIndex = INDEX_NONE, 
             uint16 ConstructId = MAX_uint16, AActor* BuildEffectInstigator = nullptr, int32 BlueprintBuildEffectIndex = INDEX_NONE)
         {
-			CARTO_LOG_VERBOSE("AddFromBuildableInstanceData: %s, Skip: %d", *BuildableClass->GetName(), ShouldInitialize || FromSaveData || IsClient);
+			const bool ShouldSkip = ShouldInitialize || FromSaveData || IsClient || !GIsRunning;
 
-			if (ShouldInitialize || FromSaveData || IsClient || !GIsRunning)
+			CARTO_LOG_VERBOSE("AddFromBuildableInstanceData: %s, Skip: %d", *BuildableClass->GetName(), ShouldSkip);
+
+			if (ShouldSkip)
 			{
 				return;
 			}
@@ -194,9 +196,11 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 			const FLightweightBuildableReplicationItem& ReplicationData, int32 MaxSize, 
 			AActor* BuildEffectInstigator, int32 BlueprintBuildIndex)
 		{
-			CARTO_LOG_VERBOSE("AddFromReplicatedData: %s, Skip: %d", *BuildableClass->GetName(), ShouldInitialize || IsClient);
+			const bool ShouldSkip = ShouldInitialize || IsClient || !GIsRunning;
 
-			if (ShouldInitialize || IsClient || !GIsRunning)
+			CARTO_LOG_VERBOSE("AddFromReplicatedData: %s, Skip: %d", *BuildableClass->GetName(), ShouldSkip);
+
+			if (ShouldSkip)
 			{
 				return;
 			}
@@ -221,9 +225,11 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 	const auto LambdaAfterAddBuildable =
 		[this](AFGBuildableSubsystem* ClassInstance, AFGBuildable* Buildable)
 		{
-			CARTO_LOG_VERBOSE("AddBuildable: %s, Skip: %d", *Buildable->GetClass()->GetName(), ShouldInitialize || IsClient);
+            const bool ShouldSkip = ShouldInitialize || IsClient || !GIsRunning;
 
-			if (ShouldInitialize || IsClient || !GIsRunning)
+			CARTO_LOG_VERBOSE("AddBuildable: %s, Skip: %d", *Buildable->GetClass()->GetName(), ShouldSkip);
+
+			if (ShouldSkip)
 			{
 				return;
 			}
@@ -248,9 +254,11 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 	const auto LambdaAfterInvalidateRuntimeInstanceDataForIndex =
 		[this](AFGLightweightBuildableSubsystem* ClassInstance, TSubclassOf<AFGBuildable> BuildableClass, int32 Index)
 		{
-			CARTO_LOG_VERBOSE("InvalidateRuntimeInstanceDataForIndex: %s, Skip: %d", *BuildableClass->GetName(), ShouldInitialize || IsClient);
+            const bool ShouldSkip = ShouldInitialize || IsClient || !GIsRunning;
 
-			if (ShouldInitialize || IsClient || !GIsRunning)
+			CARTO_LOG_VERBOSE("InvalidateRuntimeInstanceDataForIndex: %s, Skip: %d", *BuildableClass->GetName(), ShouldSkip);
+
+			if (ShouldSkip)
 			{
 				return;
 			}
@@ -278,9 +286,11 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 	const auto LambdaAfterRemoveBuildable =
 		[this](AFGBuildableSubsystem* ClassInstance, AFGBuildable* Buildable)
 		{
-			CARTO_LOG_VERBOSE("RemoveBuildable: %s, Skip: %d", *Buildable->GetClass()->GetName(), ShouldInitialize || IsClient);
+			const bool ShouldSkip = ShouldInitialize || IsClient || !GIsRunning;
 
-			if (ShouldInitialize || IsClient || !GIsRunning)
+			CARTO_LOG_VERBOSE("RemoveBuildable: %s, Skip: %d", *Buildable->GetClass()->GetName(), ShouldSkip);
+
+			if (ShouldSkip)
 			{
 				return;
 			}
@@ -750,7 +760,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
         const auto& [ClassHash, Transform/*, CustomizationData*/, BuildableExtraData, 
 			DataType, DataCache, LayerDataCache, VisualBoxCache] = CurrentBuildingData[i];
 
-		CARTO_LOG_VERY_VERBOSE("Buildable: %u, Transform: %s", ClassHash, *Transform.ToString());
+		CARTO_LOG_VERY_VERBOSE("%d | Buildable: %u, Transform: %s", i, ClassHash, *Transform.ToString());
 
 		if (RuntimeConfig.DisabledLayerBuildable.Contains(ClassHash))
 		{
