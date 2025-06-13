@@ -410,7 +410,7 @@ void UCartographGameInstanceModule::OnWorldLoaded(UWorld* World)
 	CARTO_LOG("OnWorldLoaded");
 
     IsInWorld = true;
-	ShouldInitialize = true;
+	//ShouldInitialize = true;  // It's too late here, the buildables are already registered. Moved to ModSubSystem.
 	IsClient = GetWorld()->IsNetMode(NM_Client);
 
 	if (!IsClient)

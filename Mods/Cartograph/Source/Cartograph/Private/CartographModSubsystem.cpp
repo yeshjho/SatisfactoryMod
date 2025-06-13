@@ -25,6 +25,7 @@ void ACartographModSubsystem::Init()
     CARTO_LOG("CartographModSubsystem::Init");
 
     Instance = this;
+    UCartographGameInstanceModule::Instance->ShouldInitialize = true;
 }
 
 
