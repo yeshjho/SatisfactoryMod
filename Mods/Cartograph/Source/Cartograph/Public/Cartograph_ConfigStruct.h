@@ -16,18 +16,6 @@ public:
     float RedrawTimeBudget{};
 
     UPROPERTY(BlueprintReadWrite)
-    int32 ConveyorBeltSplineSegments{};
-
-    UPROPERTY(BlueprintReadWrite)
-    int32 PipelineSplineSegments{};
-
-    UPROPERTY(BlueprintReadWrite)
-    int32 RailwaySegments{};
-
-    UPROPERTY(BlueprintReadWrite)
-    int32 HypertubeSegments{};
-
-    UPROPERTY(BlueprintReadWrite)
     FString MainCategoryToggle{};
 
     UPROPERTY(BlueprintReadWrite)

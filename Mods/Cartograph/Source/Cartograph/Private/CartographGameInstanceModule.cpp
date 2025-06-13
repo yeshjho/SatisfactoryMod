@@ -57,42 +57,6 @@ void draw_line(UCanvas* Canvas, const T& WorldStart, const U& WorldEnd, const FL
 }
 
 
-void UCartographGameInstanceModule::AfterSplineSegmentsModified()
-{
-	FCartograph_ConfigStruct ConfigInstance = FCartograph_ConfigStruct::GetActiveConfig(GetWorld());
-	for (auto& [_, SplineData] : BuildableSplineDataMap)
-	{
-		if (SplineData.SegmentsConfigName.IsNone())
-		{
-            SplineData.SegmentsCached = UnspecifiedSplineSegments;
-		}
-		else
-		{
-			const FProperty* Property = FCartograph_ConfigStruct::StaticStruct()->FindPropertyByName(SplineData.SegmentsConfigName);
-			if (!Property)
-			{
-				CARTO_LOG_ERROR("SparsityConfigName not found: %s", *SplineData.SegmentsConfigName.ToString());
-				continue;
-			}
-			SplineData.SegmentsCached = *Property->ContainerPtrToValuePtr<int>(&ConfigInstance);
-		}
-	}
-
-	if (!IsInWorld)
-	{
-		return;
-	}
-
-	for (FBuildingData& BuildingData : CurrentBuildingData)
-	{
-		BuildingData.CalculateSplinePoints();
-	}
-
-	CARTO_LOG_DEBUG("Spline segments modified");
-	RedrawMap(true);
-}
-
-
 void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase)
 {
 	Super::DispatchLifecycleEvent(Phase);
@@ -139,20 +103,6 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 			{
 				BuildableBuildLayerDataOverrideMap.Add(Buildable.Get(), LayerData);
 			}
-		}
-	}
-
-	AfterSplineSegmentsModified();
-
-	// Wanted to do this in Blueprint, inheriting BP_CP_Int, but couldn't get the module manager there.
-	const FConfigId ConfigId{ "Cartograph", "" };
-	const UConfigManager* ConfigManager = GetWorld()->GetGameInstance()->GetSubsystem<UConfigManager>();
-	const UConfigPropertySection* RootSection = ConfigManager->GetConfigurationRootSection(ConfigId);
-	for (const auto& [Name, Property] : RootSection->SectionProperties)
-	{
-		if (Name.EndsWith("Segments"))
-		{
-            Property->OnPropertyValueChanged.AddDynamic(this, &UCartographGameInstanceModule::AfterSplineSegmentsModified);
 		}
 	}
 
@@ -860,16 +810,17 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
 
 		case EBuildingDataType::Spline:
 		{
-			const FSplineDataCache* SplineDataCachePtr = std::get_if<FSplineDataCache>(&DataCache);
+            const FSplineDataCache* SplineDataCachePtr = std::get_if<FSplineDataCache>(&DataCache);
             CARTO_LOG_ERROR_BREAK_IF_NULL(SplineDataCachePtr);
 
-			const auto& [SplineData, StartPoints, EndPoints] = *SplineDataCachePtr;
-			CARTO_LOG_ERROR_BREAK_IF_NULL(SplineData);
+			const FSplineExtraData* SplineExtraData = std::get_if<FSplineExtraData>(&BuildableExtraData);
+            CARTO_LOG_ERROR_BREAK_IF_NULL(SplineExtraData);
 
-            const int Num = StartPoints.Num();
-            for (int j = 0; j < Num; j++)
+            const int Num = SplineExtraData->Points.Num();
+            for (int j = 0; j < Num - 1; j++)
             {
-                draw_line(Canvas, StartPoints[j], EndPoints[j], SplineData->Color, SplineData->Thickness);
+                draw_line(Canvas, SplineExtraData->Points[j], SplineExtraData->Points[j + 1],
+					SplineDataCachePtr->SplineData->Color, SplineDataCachePtr->SplineData->Thickness);
                 co_await Budget;
             }
 

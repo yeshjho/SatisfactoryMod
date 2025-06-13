@@ -81,33 +81,7 @@ FArchive& operator<<(FArchive& Ar, std::monostate&)
 
 FArchive& operator<<(FArchive& Ar, FSplineExtraData& SplineData)
 {
-	Ar << SplineData.SplinePoints;
-
-	if (!Ar.IsLoading())  // Serialize
-	{
-		bool IsSet = SplineData.Tangents.IsSet();
-		Ar.SerializeBits(&IsSet, 1);
-
-		if (IsSet)
-		{
-			auto& [LeaveTangents, ArriveTangents] = SplineData.Tangents.GetValue();
-			Ar << LeaveTangents;
-			Ar << ArriveTangents;
-		}
-	}
-	else  // Deserialize
-	{
-		bool IsSet;
-		Ar.SerializeBits(&IsSet, 1);
-		if (IsSet)
-		{
-			TArray<FVector2D> LeaveTangents, ArriveTangents;
-			Ar << LeaveTangents;
-			Ar << ArriveTangents;
-			SplineData.Tangents = std::make_pair(std::move(LeaveTangents), std::move(ArriveTangents));
-		}
-	}
-
+	Ar << SplineData.Points;
 	return Ar;
 }
 
@@ -247,34 +221,13 @@ void FBuildingData::AddExtraData(AFGBuildable* Buildable)
 		CARTO_LOG_ERROR_RETURN_IF_NULL(SplineComponent);
 		Transform = SplineComponent->GetComponentTransform();
 
-		TArray<FVector2D> SplinePoints;
-        SplinePoints.Reserve(SplineComponent->SplineCurves.Position.Points.Num());
-		Algo::Transform(SplineComponent->SplineCurves.Position.Points, SplinePoints,
-			[](const FInterpCurvePoint<FVector>& Point) { return FVector2D{ Point.OutVal }; });
-		FSplineExtraData ExtraData{
-			.SplinePoints = std::move(SplinePoints),
-		};
-
-		const FSplineData* SplineData = UCartographGameInstanceModule::Instance->BuildableSplineDataMap.Find(BuildableClass.Get());
-        if (!SplineData && UCartographGameInstanceModule::Instance->ModdedBuildings.Contains(BuildableClass.Get()))
-        {
-            SplineData = &UCartographGameInstanceModule::Instance->UnspecifiedSplineData;
-        }
-		if (!SplineData)
+		FSplineExtraData ExtraData;
+        ExtraData.Points.Reserve(SPLINE_SEGMENTS);
+        const float Step = SplineComponent->Duration / SPLINE_SEGMENTS;
+		for (int i = 0; i < SPLINE_SEGMENTS + 1; i++)
 		{
-			CARTO_LOG_WARNING("Can't find spline data for %s", *BuildableClass->GetName());
-		}
-		else if (SplineData->UseTangents)
-		{
-			TArray<FVector2D> LeaveTangents;
-			Algo::Transform(SplineComponent->SplineCurves.Position.Points, LeaveTangents,
-				[](const FInterpCurvePoint<FVector>& Point) { return FVector2D{ Point.LeaveTangent }; });
-
-			TArray<FVector2D> ArriveTangents;
-			Algo::Transform(SplineComponent->SplineCurves.Position.Points, ArriveTangents,
-				[](const FInterpCurvePoint<FVector>& Point) { return FVector2D{ Point.ArriveTangent }; });
-
-			ExtraData.Tangents = std::make_pair(std::move(LeaveTangents), std::move(ArriveTangents));
+			const FVector Pos = SplineComponent->GetLocationAtTime(i * Step, ESplineCoordinateSpace::World, true);
+            ExtraData.Points.Add(FVector2D{ Pos });
 		}
 
 		BuildableExtraData = std::move(ExtraData);
@@ -360,20 +313,14 @@ void FBuildingData::FillInCache(TSubclassOf<AFGBuildable> OriginalBuildableClass
 			return;
 		}
 
-		if (const int SplinePointCount = SplineExtraData->SplinePoints.Num();
-			SplinePointCount < 2)  // This should never happen, but just in case.
-		{
-			return;
-		}
-
 		DataType = EBuildingDataType::Spline;
 		DataCache = FSplineDataCache{
 			.SplineData = SplineData,
 		};
 
-		CalculateSplinePoints();
+		FillInSplineVisualBoxCache();
 
-        return;  // Visual Box Cache is filled in CalculateSplinePoints
+        return;
 	}
 	else if (BuildableClass->IsChildOf(AFGBuildableWire::StaticClass()))
 	{
@@ -600,80 +547,16 @@ void FBuildingData::FillInVisualBoxCache(TSubclassOf<AFGBuildable> OriginalBuild
 }
 
 
-void FBuildingData::CalculateSplinePoints()
-{
-	if (DataType != EBuildingDataType::Spline)
-	{
-		return;
-	}
-
-	FSplineDataCache* SplineDataCachePtr = std::get_if<FSplineDataCache>(&DataCache);
-	CARTO_LOG_ERROR_RETURN_IF_NULL(SplineDataCachePtr);
-
-	auto& [SplineData, StartPoints, EndPoints] = *SplineDataCachePtr;
-	const FSplineExtraData* SplineExtraData = std::get_if<FSplineExtraData>(&BuildableExtraData);
-	CARTO_LOG_ERROR_RETURN_IF_NULL(SplineExtraData);
-
-	const int SplinePointCount = SplineExtraData->SplinePoints.Num();
-	if (SplinePointCount < 2)  // This should never happen, but just in case.
-	{
-		return;
-	}
-
-	const int Segments = SplineData->SegmentsCached;
-	const float Step = 1.f / Segments;
-
-	const std::pair<TArray<FVector2D>, TArray<FVector2D>>* Tangents = SplineExtraData->Tangents.GetPtrOrNull();
-
-	StartPoints.Empty(SplinePointCount * Segments);
-	EndPoints.Empty(SplinePointCount * Segments);
-	for (int i = 1; i < SplinePointCount; i++)
-	{
-		const FVector2D& PrevPoint = SplineExtraData->SplinePoints[i - 1];
-		const FVector2D& NextPoint = SplineExtraData->SplinePoints[i];
-
-		for (int j = 0; j < Segments; j++)
-		{
-			if (SplineData->UseTangents)
-			{
-				const FVector2D& LeaveTangent = Tangents->first[i - 1];
-				const FVector2D& ArriveTangent = Tangents->second[i];
-
-				StartPoints.Add(FVector2D{ Transform.TransformPosition(FVector{
-					FMath::CubicInterp(PrevPoint, LeaveTangent, NextPoint, ArriveTangent, j * Step), 0 }) });
-				EndPoints.Add(FVector2D{ Transform.TransformPosition(FVector{
-					FMath::CubicInterp(PrevPoint, LeaveTangent, NextPoint, ArriveTangent, (j + 1) * Step), 0 }) });
-			}
-			else
-			{
-				StartPoints.Add(FVector2D{ Transform.TransformPosition(FVector{
-					FMath::Lerp(PrevPoint, NextPoint, j * Step), 0 }) });
-				EndPoints.Add(FVector2D{ Transform.TransformPosition(FVector{
-					FMath::Lerp(PrevPoint, NextPoint, (j + 1) * Step), 0 }) });
-			}
-		}
-	}
-
-	FillInSplineVisualBoxCache();
-}
-
-
 void FBuildingData::FillInSplineVisualBoxCache()
 {
 	VisualBoxCache = FBox2D{ ForceInit };
 
-	FSplineDataCache* SplineDataCachePtr = std::get_if<FSplineDataCache>(&DataCache);
+	FSplineExtraData* SplineDataCachePtr = std::get_if<FSplineExtraData>(&BuildableExtraData);
 	CARTO_LOG_ERROR_RETURN_IF_NULL(SplineDataCachePtr);
 
-	auto& [SplineData, StartPoints, EndPoints] = *SplineDataCachePtr;
-
-	for (const FVector2D& StartPoint : StartPoints)
+	for (const FVector2D& Point : SplineDataCachePtr->Points)
 	{
-		VisualBoxCache += StartPoint;
-	}
-	for (const FVector2D& EndPoint : EndPoints)
-	{
-		VisualBoxCache += EndPoint;
+		VisualBoxCache += Point;
 	}
 	VisualBoxCache = VisualBoxCache.ExpandBy(BoxExpansionCentimeters);
 }

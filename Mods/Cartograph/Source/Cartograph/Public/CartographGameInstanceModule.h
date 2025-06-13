@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include <array>
 
@@ -36,6 +36,8 @@ constexpr int RENDER_TEXTURE_SIZE = 1024 * 8;
 
 constexpr double ORIGIN_UV[] = { -WEST_BOUND_CENTIMETERS / MAP_WIDTH_CENTIMETERS, -NORTH_BOUND_CENTIMETERS / MAP_HEIGHT_CENTIMETERS };
 constexpr double PIXEL_PER_CENTIMETER[] = { RENDER_TEXTURE_SIZE / MAP_WIDTH_CENTIMETERS, RENDER_TEXTURE_SIZE / MAP_HEIGHT_CENTIMETERS };
+
+constexpr int SPLINE_SEGMENTS = 8;
 
 
 DECLARE_LOG_CATEGORY_EXTERN(LogCartograph, Display, All);
@@ -86,14 +88,6 @@ struct FSplineData
 
 	UPROPERTY(EditDefaultsOnly)
     float Thickness;
-
-	UPROPERTY(EditDefaultsOnly)
-	FName SegmentsConfigName;
-
-	UPROPERTY(EditDefaultsOnly)
-	bool UseTangents;
-
-	int SegmentsCached;
 };
 
 
@@ -228,9 +222,6 @@ private:
 
 	// For blueprint use only
 private:
-	UFUNCTION()
-	void AfterSplineSegmentsModified();
-
 	UFUNCTION(BlueprintCallable)
 	void OnZFilterUpdated(float Min, float Max);
 

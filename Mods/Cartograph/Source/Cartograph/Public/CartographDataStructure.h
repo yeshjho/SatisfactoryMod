@@ -12,8 +12,7 @@ struct FFGDynamicStruct;
 
 struct FSplineExtraData
 {
-	TArray<FVector2D> SplinePoints;
-	TOptional<std::pair<TArray<FVector2D>, TArray<FVector2D>>> Tangents;
+	TArray<FVector2D> Points;
 
 	bool operator==(const FSplineExtraData& Other) const noexcept = default;
 };
@@ -70,8 +69,6 @@ struct FNormalDataCache
 struct FSplineDataCache
 {
 	const struct FSplineData* SplineData;
-	TArray<FVector2D> StartPoints;
-	TArray<FVector2D> EndPoints;
 };
 
 
@@ -106,7 +103,6 @@ struct FBuildingData
 	void FillInHashAndCache(TSubclassOf<AFGBuildable> BuildableClass);  // Call it after filling in the extra data
     void FillInVisualBoxCache(TSubclassOf<AFGBuildable> OriginalBuildableClass);  // Call it after filling in the extra data
 
-	void CalculateSplinePoints();  // Call it after filling in the extra data & cache
     void FillInSplineVisualBoxCache();  // Call it after filling in the extra data & cache
 
 	static FVector2D GetBuildingSize(TSubclassOf<AFGBuildable> BuildableClass);
