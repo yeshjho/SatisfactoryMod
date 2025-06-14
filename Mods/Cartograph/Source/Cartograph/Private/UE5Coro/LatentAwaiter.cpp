@@ -1,4 +1,4 @@
-// Copyright © Laura Andelare
+﻿// Copyright © Laura Andelare
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -111,7 +111,7 @@ bool FLatentAwaiter::ShouldResume()
 {
 	checkf(IsInGameThread(),
 	       TEXT("Latent awaiters may only be used on the game thread"));
-	checkf(State, TEXT("Attempting to poll invalid latent awaiter"));
+	checkf(IsValid(), TEXT("Attempting to poll invalid latent awaiter"));
 	return (*Resume)(State, false);
 }
 
