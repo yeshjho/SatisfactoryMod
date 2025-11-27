@@ -486,9 +486,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
         NewBuildingData.AddExtraData(Factory.Get());
 		NewBuildingData.FillInHashAndCache(Factory->GetClass());
 
-		const int32 Pos = Algo::LowerBound(CurrentBuildingData, NewBuildingData);
-		OnBuildingDataAdd(NewBuildingData, Pos);
-		CurrentBuildingData.Insert(std::move(NewBuildingData), Pos);
+		CurrentBuildingData.Add(std::move(NewBuildingData));
 
         InitializeProgress = static_cast<float>(++Processed) / Total;
 		co_await Budget;
@@ -510,13 +508,19 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::InitialBuildableGather(
             NewBuildingData.AddExtraData(InstanceData.TypeSpecificData);
 			NewBuildingData.FillInHashAndCache(Type);
 
-			const int32 Pos = Algo::LowerBound(CurrentBuildingData, NewBuildingData);
-            OnBuildingDataAdd(NewBuildingData, Pos);
-			CurrentBuildingData.Insert(std::move(NewBuildingData), Pos);
+			CurrentBuildingData.Add(std::move(NewBuildingData));
 
 			InitializeProgress = static_cast<float>(++Processed) / Total;
 			co_await Budget;
 		}
+	}
+
+	Algo::Sort(CurrentBuildingData);
+	const int Size = CurrentBuildingData.Num();
+	for (int i = 0; i < Size; i++)
+	{
+		const FBuildingData& BuildingData = CurrentBuildingData[i];
+		OnBuildingDataAdd(BuildingData, i);
 	}
 
 	MinHeight = !CurrentBuildingData.IsEmpty() ? CurrentBuildingData[0].Transform.GetLocation().Z : -100;
