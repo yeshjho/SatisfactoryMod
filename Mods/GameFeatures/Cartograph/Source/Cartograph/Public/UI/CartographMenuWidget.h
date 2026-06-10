@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
@@ -35,7 +35,7 @@ struct FMenuItem
     FString DisplayName;
 
     UPROPERTY(BlueprintReadWrite)
-    UCartographMenuItemWidget* Widget;
+    TObjectPtr<UCartographMenuItemWidget> Widget;
 };
 
 
@@ -51,7 +51,7 @@ struct FSubCategoryItem
     TMap<FName, FMenuItem> Items;
 
     UPROPERTY(BlueprintReadWrite)
-    UCartographMenuCategoryWidget* CategoryWidget;
+    TObjectPtr<UCartographMenuCategoryWidget> CategoryWidget;
 };
 
 
@@ -116,7 +116,7 @@ protected:
 
 
     UPROPERTY(BlueprintReadWrite)
-    UCartographGameInstanceModule* GameInstanceModule;
+    TObjectPtr<UCartographGameInstanceModule> GameInstanceModule;
 
     UPROPERTY(BlueprintReadWrite)
     TMap<FName, FHeadingItem> MenuItemHierarchy;

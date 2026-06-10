@@ -1,4 +1,4 @@
-// Copyright © Laura Andelare
+﻿// Copyright © Laura Andelare
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -30,6 +30,8 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "UE5CoroDelegateCallbackTarget.h"
+
+#include <functional>
 
 void UUE5CoroDelegateCallbackTarget::Init(std::function<void(void*)> InFn)
 {

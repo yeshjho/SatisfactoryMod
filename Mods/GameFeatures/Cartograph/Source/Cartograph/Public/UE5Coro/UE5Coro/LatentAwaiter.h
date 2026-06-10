@@ -1,4 +1,4 @@
-// Copyright © Laura Andelare
+﻿// Copyright © Laura Andelare
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -32,13 +32,13 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "UE5Coro/Definition.h"
+#include "UE5Coro/UE5Coro/Definition.h"
 #include <concepts>
 #include <functional>
 #include "Engine/OverlapResult.h"
 #include "Engine/StreamableManager.h"
-#include "UE5Coro/Private.h"
-#include "UE5Coro/Promise.h"
+#include "UE5Coro/UE5Coro/Private.h"
+#include "UE5Coro/UE5Coro/Promise.h"
 #include "WorldCollision.h"
 
 namespace UE5Coro::Latent
@@ -506,5 +506,5 @@ auto UE5Coro::Latent::AsyncLoadPrimaryAssets(TArray<FPrimaryAssetId> AssetsToLoa
 		AsyncLoadPrimaryAssets(std::move(AssetsToLoad), LoadBundles, Priority));
 }
 
-#include "LatentChain.inl"
+#include "UE5Coro/UE5Coro/LatentChain.inl"
 #pragma endregion

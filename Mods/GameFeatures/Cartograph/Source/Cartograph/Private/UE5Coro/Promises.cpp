@@ -1,4 +1,4 @@
-// Copyright © Laura Andelare
+﻿// Copyright © Laura Andelare
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -31,8 +31,8 @@
 
 #include "LatentActions.h"
 #include "LatentExitReason.h"
-#include "UE5Coro/LatentAwaiter.h"
-#include "UE5Coro/Promise.h"
+#include "UE5Coro/UE5Coro/LatentAwaiter.h"
+#include "UE5Coro/UE5Coro/Promise.h"
 
 using namespace UE5Coro::Private;
 

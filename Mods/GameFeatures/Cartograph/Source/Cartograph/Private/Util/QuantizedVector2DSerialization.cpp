@@ -1,6 +1,7 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+﻿// Copyright Epic Games, Inc. All Rights Reserved.
 
-#include "QuantizedVector2DSerialization.h"
+#include "Util/QuantizedVector2DSerialization.h"
+
 #include "HAL/PlatformMath.h"
 #include "Logging/LogMacros.h"
 #include "Math/Vector.h"
@@ -145,8 +146,5 @@ bool ReadQuantizedVector2D(const int32 Scale, FVector2D& Value, FArchive& Ar)
 		Value = FVector2D(TempValue);
 		return true;
 	}
-
-	// Should not get here so something is very wrong.
-	return false;
 }
 

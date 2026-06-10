@@ -1,4 +1,4 @@
-// Copyright © Laura Andelare
+﻿// Copyright © Laura Andelare
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -32,12 +32,12 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "UE5Coro/Definition.h"
+#include "UE5Coro/UE5Coro/Definition.h"
 #include <concepts>
 #include <functional>
 #include "Engine/LatentActionManager.h"
 #include "Engine/World.h"
-#include "UE5Coro/UE5CoroSubsystem.h"
+#include "UE5Coro/UE5Coro/UE5CoroSubsystem.h"
 
 #pragma region Private
 namespace UE5Coro::Private

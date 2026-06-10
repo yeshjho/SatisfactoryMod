@@ -29,10 +29,10 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "UE5Coro/LatentAwaiter.h"
+#include "UE5Coro/UE5Coro/LatentAwaiter.h"
 #include "LatentActions.h"
-#include "UE5Coro/Promise.h"
-#include "UE5Coro/UE5CoroSubsystem.h"
+#include "UE5Coro/UE5Coro/Promise.h"
+#include "UE5Coro/UE5Coro/UE5CoroSubsystem.h"
 
 using namespace UE5Coro::Private;
 

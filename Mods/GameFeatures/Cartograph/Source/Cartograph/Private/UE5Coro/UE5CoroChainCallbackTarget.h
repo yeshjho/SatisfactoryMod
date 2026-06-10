@@ -1,4 +1,4 @@
-// Copyright © Laura Andelare
+﻿// Copyright © Laura Andelare
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -32,7 +32,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "UE5Coro/Definition.h"
+#include "UE5Coro/UE5Coro/Definition.h"
 #include "UE5CoroChainCallbackTarget.generated.h"
 
 namespace UE5Coro::Private

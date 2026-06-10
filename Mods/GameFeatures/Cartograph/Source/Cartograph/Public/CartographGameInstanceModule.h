@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <array>
 
@@ -157,7 +157,7 @@ struct FBuildingDescriptorData
     TSubclassOf<UFGBuildSubCategory> SubCategory;
 
 	UPROPERTY(EditDefaultsOnly)
-	UTexture2D* Icon;
+	TObjectPtr<UTexture2D> Icon;
 };
 
 

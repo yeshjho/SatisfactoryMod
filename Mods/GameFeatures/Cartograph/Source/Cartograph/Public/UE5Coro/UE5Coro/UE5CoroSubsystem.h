@@ -1,4 +1,4 @@
-// Copyright © Laura Andelare
+﻿// Copyright © Laura Andelare
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -32,10 +32,10 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "UE5Coro/Definition.h"
+#include "UE5Coro/UE5Coro/Definition.h"
 #include "Engine/LatentActionManager.h"
 #include "Subsystems/WorldSubsystem.h"
-#include "UE5Coro/Private.h"
+#include "UE5Coro/UE5Coro/Private.h"
 #include "UE5CoroSubsystem.generated.h"
 
 /** Subsystem supporting some TCoroutine functionality.

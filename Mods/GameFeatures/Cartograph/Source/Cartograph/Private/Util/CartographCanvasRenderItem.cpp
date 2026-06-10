@@ -1,4 +1,4 @@
-#include "Util/CartographCanvasRenderItem.h"
+﻿#include "Util/CartographCanvasRenderItem.h"
 
 #include "CanvasRender.h"
 #include "CartographGameInstanceModule.h"
@@ -18,7 +18,7 @@ bool FCartographCanvasRenderItem::Render_RenderThread(FCanvasRenderContext& Rend
 
 		RenderContext.AddPass(
 			RDG_EVENT_NAME("CanvasBatchedElements"),
-			[LocalData = Data, DrawRenderState, Canvas](FRHICommandListImmediate& RHICmdList)
+			[LocalData = Data, DrawRenderState, Canvas](FRHICommandList& RHICmdList)
 			{
 				// current render target set for the canvas
 				const FRenderTarget* CanvasRenderTarget = Canvas->GetRenderTarget();

@@ -1,4 +1,4 @@
-// Copyright © Laura Andelare
+﻿// Copyright © Laura Andelare
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -32,9 +32,9 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "UE5Coro/Definition.h"
+#include "UE5Coro/UE5Coro/Definition.h"
 #include <functional>
-#include "UE5Coro/Coroutine.h"
+#include "UE5Coro/UE5Coro/Coroutine.h"
 
 namespace UE5Coro::Latent
 {

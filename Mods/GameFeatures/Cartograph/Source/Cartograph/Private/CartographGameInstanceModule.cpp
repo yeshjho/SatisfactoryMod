@@ -1,34 +1,36 @@
 ﻿#include "CartographGameInstanceModule.h"
 
-#include "AssetRegistryModule.h"
+#include <sstream>
+
+#include "AssetRegistry/AssetRegistryModule.h"
 #include "CanvasItem.h"
-#include "CanvasPanelSlot.h"
+#include "Components/CanvasPanelSlot.h"
 #include "Engine/Canvas.h"
 #include "Engine/CanvasRenderTarget2D.h"
-#include "FindLast.h"
-#include "HorizontalBox.h"
-#include "HorizontalBoxSlot.h"
-#include "OutputDeviceNull.h"
-#include "WidgetBlueprintGeneratedClass.h"
+#include "Algo/FindLast.h"
+#include "Components/HorizontalBox.h"
+#include "Components/HorizontalBoxSlot.h"
+#include "Misc/OutputDeviceNull.h"
+#include "Blueprint/WidgetBlueprintGeneratedClass.h"
 
 #include "FGLightweightBuildableSubsystem.h"
-#include "FGBuildable.h"
+#include "Buildables/FGBuildable.h"
 #include "FGBuildableBeam.h"
 #include "FGBuildableSubsystem.h"
-#include "FGBuildableWire.h"
-#include "FGBuildingDescriptor.h"
+#include "Buildables/FGBuildableWire.h"
+#include "Resources/FGBuildingDescriptor.h"
 #include "FGBuildCategory.h"
 #include "FGBuildSubCategory.h"
 #include "FGPlayerController.h"
 #include "FGSaveSession.h"
 #include "FGSplineBuildableInterface.h"
 
-#include "ConfigPropertyString.h"
-#include "ModLoadingLibrary.h"
+#include "Configuration/Properties/ConfigPropertyString.h"
+#include "ModLoading/ModLoadingLibrary.h"
 #include "Patching/BlueprintHookManager.h"
 #include "Patching/NativeHookManager.h"
 
-#include "CartographCanvasRenderItem.h"
+#include "Util/CartographCanvasRenderItem.h"
 #include "CartographModSubsystem.h"
 #include "CartographRemoteCallObject.h"
 #include "Cartograph_ConfigStruct.h"
@@ -84,9 +86,9 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 
 	for (const auto& [Material, CategoryData] : MaterialBuildCategoryDataOverrideMap)
 	{
-		for (const auto& [_, Recipe] : Cast<UFGFactoryCustomizationDescriptor_Material>(Material->ClassDefaultObject)->GetBuildableMap())
+		for (const auto& [_, Recipe] : GetMutableDefault<UFGFactoryCustomizationDescriptor_Material>(Material->GetClass())->GetBuildableMap())
 		{
-			TSubclassOf<AFGBuildable> Buildable = Cast<UFGBuildingDescriptor>(UFGRecipe::GetDescriptorForRecipe(Recipe)->ClassDefaultObject)->mBuildableClass;
+			TSubclassOf<AFGBuildable> Buildable = GetDefault<UFGBuildingDescriptor>(UFGRecipe::GetDescriptorForRecipe(Recipe)->GetClass())->mBuildableClass;
 			if (!BuildableBuildCategoryDataOverrideMap.Contains(Buildable.Get()))
 			{
 				BuildableBuildCategoryDataOverrideMap.Add(Buildable.Get(), CategoryData);
@@ -96,9 +98,9 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 
 	for (const auto& [Material, LayerData] : MaterialBuildLayerDataOverrideMap)
 	{
-		for (const auto& [_, Recipe] : Cast<UFGFactoryCustomizationDescriptor_Material>(Material->ClassDefaultObject)->GetBuildableMap())
+		for (const auto& [_, Recipe] : GetMutableDefault<UFGFactoryCustomizationDescriptor_Material>(Material->GetClass())->GetBuildableMap())
 		{
-			TSubclassOf<AFGBuildable> Buildable = Cast<UFGBuildingDescriptor>(UFGRecipe::GetDescriptorForRecipe(Recipe)->ClassDefaultObject)->mBuildableClass;
+			TSubclassOf<AFGBuildable> Buildable = GetDefault<UFGBuildingDescriptor>(UFGRecipe::GetDescriptorForRecipe(Recipe)->GetClass())->mBuildableClass;
 			if (!BuildableBuildLayerDataOverrideMap.Contains(Buildable.Get()))
 			{
 				BuildableBuildLayerDataOverrideMap.Add(Buildable.Get(), LayerData);
@@ -702,7 +704,7 @@ UE5Coro::TCoroutine<> UCartographGameInstanceModule::RedrawMapCoroutine(
         }
 
 		const int* Beg = BuildingsToDraw.GetData();
-        BuildingsToDraw.RemoveAt(MaxIt - Beg + 1, BuildingsToDraw.Num() - (MaxIt - Beg + 1), false);
+        BuildingsToDraw.RemoveAt(MaxIt - Beg + 1, BuildingsToDraw.Num() - (MaxIt - Beg + 1), EAllowShrinking::No);
         BuildingsToDraw.RemoveAt(0, MinIt - Beg);
 		co_await Budget;
 
@@ -960,7 +962,7 @@ void UCartographGameInstanceModule::RegisterMenuButton() const
 			return static_cast<const UCartographPanelWidgetAccessor*>(PanelWidget)->GetSlotClass();
 		}
 
-		static TArray<UPanelSlot*>& GetPanelSlots(UPanelWidget* PanelWidget) {
+		static TArray<TObjectPtr<UPanelSlot>>& GetPanelSlots(UPanelWidget* PanelWidget) {
 			return static_cast<UCartographPanelWidgetAccessor*>(PanelWidget)->Slots;
 		}
 		UCartographPanelWidgetAccessor() = delete;
@@ -1002,7 +1004,7 @@ void UCartographGameInstanceModule::RegisterMenuButton() const
     CARTO_LOG_ERROR_RETURN_IF_NULL(TextPtr);
     *TextPtr = LOCTEXT("CartographMenuShow", "Show Cartograph Menu");
 
-    TArray<UPanelSlot*>& MutablePanelSlots = UCartographPanelWidgetAccessor::GetPanelSlots(Parent);
+	TArray<TObjectPtr<UPanelSlot>> MutablePanelSlots = UCartographPanelWidgetAccessor::GetPanelSlots(Parent);
 	MutablePanelSlots.Insert(HBoxPanelSlot, Index);
 
 
@@ -1095,7 +1097,7 @@ void UCartographGameInstanceModule::SaveRuntimeConfig()
 	const UConfigPropertySection* RootSection = ConfigManager->GetConfigurationRootSection(ConfigId);
 
 	{
-		UConfigProperty* const* MainCategoryProperty = RootSection->SectionProperties.Find("MainCategoryToggle");
+		const TObjectPtr<UConfigProperty>* MainCategoryProperty = RootSection->SectionProperties.Find("MainCategoryToggle");
 		CARTO_LOG_ERROR_RETURN_IF_NULL(MainCategoryProperty);
 		auto* MainCategoryStringProperty = Cast<UConfigPropertyString>(*MainCategoryProperty);
 		CARTO_LOG_ERROR_RETURN_IF_NULL(MainCategoryStringProperty);
@@ -1109,7 +1111,7 @@ void UCartographGameInstanceModule::SaveRuntimeConfig()
 		MainCategoryStringProperty->MarkDirty();
 	}
 	{
-        UConfigProperty* const* SubCategoryProperty = RootSection->SectionProperties.Find("SubCategoryToggle");
+		const TObjectPtr<UConfigProperty>* SubCategoryProperty = RootSection->SectionProperties.Find("SubCategoryToggle");
         CARTO_LOG_ERROR_RETURN_IF_NULL(SubCategoryProperty);
         auto* SubCategoryStringProperty = Cast<UConfigPropertyString>(*SubCategoryProperty);
         CARTO_LOG_ERROR_RETURN_IF_NULL(SubCategoryStringProperty);
@@ -1127,7 +1129,7 @@ void UCartographGameInstanceModule::SaveRuntimeConfig()
         SubCategoryStringProperty->MarkDirty();
     }
     {
-        UConfigProperty* const* BuildingProperty = RootSection->SectionProperties.Find("BuildingToggle");
+	    const TObjectPtr<UConfigProperty>* BuildingProperty = RootSection->SectionProperties.Find("BuildingToggle");
         CARTO_LOG_ERROR_RETURN_IF_NULL(BuildingProperty);
         auto* BuildingStringProperty = Cast<UConfigPropertyString>(*BuildingProperty);
         CARTO_LOG_ERROR_RETURN_IF_NULL(BuildingStringProperty);
@@ -1380,7 +1382,7 @@ void UCartographGameInstanceModule::GatherBuildables()
 			continue;
 		}
 
-		auto* DescriptorInstance = Cast<UFGBuildingDescriptor>(Descriptor->ClassDefaultObject);
+		const auto* DescriptorInstance = GetDefault<UFGBuildingDescriptor>(Descriptor->GetClass());
 		CARTO_LOG_ERROR_DO_IF_NULL(DescriptorInstance, continue);
 		TSubclassOf<AFGBuildable> BuildableClass = DescriptorInstance->mBuildableClass;
 		if (!BuildableClass)
@@ -1517,7 +1519,7 @@ void UCartographGameInstanceModule::ProcessOverrideData(TMap<KeyType, ValueType>
 	}
 
 
-	UObject* CDO = OverrideDataClass->ClassDefaultObject;
+	auto* CDO = GetMutableDefault<UObject>(OverrideDataClass);
 	CARTO_LOG_ERROR_RETURN_IF_NULL(CDO);
 	MapProperty->WithScriptMap(Property->ContainerPtrToValuePtr<void>(CDO),
 		[this, MapProperty, &MatchingValueStructProperties, &MapToBeOverriden](auto* OverrideMap)
@@ -1584,7 +1586,7 @@ void UCartographGameInstanceModule::ProcessOverrideData(TSet<T>& SetToBeOverride
 	}
 
 
-	UObject* CDO = OverrideDataClass->ClassDefaultObject;
+	auto* CDO = GetMutableDefault<UObject>(OverrideDataClass);
 	CARTO_LOG_ERROR_RETURN_IF_NULL(CDO);
 	void* OverrideSet = Property->ContainerPtrToValuePtr<void>(CDO);
 	const int32 Num = SetProperty->GetNum(OverrideSet);
@@ -1654,7 +1656,7 @@ void UCartographGameInstanceModule::ProcessLayerCategoriesOverride(UClass* Overr
 	}
 
 
-	UObject* CDO = OverrideDataClass->ClassDefaultObject;
+	auto* CDO = GetMutableDefault<UObject>(OverrideDataClass);
 	CARTO_LOG_ERROR_RETURN_IF_NULL(CDO);
     void* OverrideArray = Property->ContainerPtrToValuePtr<void>(CDO);
     const int32 Num = FScriptArrayHelper{ ArrayProperty, OverrideArray }.Num();

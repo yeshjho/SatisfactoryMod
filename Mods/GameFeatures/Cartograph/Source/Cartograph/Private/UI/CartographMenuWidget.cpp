@@ -1,14 +1,14 @@
-#include "UI/CartographMenuWidget.h"
+﻿#include "UI/CartographMenuWidget.h"
 
-#include "PanelWidget.h"
+#include "Components/PanelWidget.h"
 
-#include "FGBuildable.h"
-#include "FGBuildingDescriptor.h"
+#include "Buildables/FGBuildable.h"
+#include "Resources/FGBuildingDescriptor.h"
 
 #include "CartographGameInstanceModule.h"
-#include "CartographLayerToggleItemWidget.h"
-#include "CartographMenuCategoryWidget.h"
-#include "CartographMenuLayerItemWidget.h"
+#include "UI/CartographLayerToggleItemWidget.h"
+#include "UI/CartographMenuCategoryWidget.h"
+#include "UI/CartographMenuLayerItemWidget.h"
 
 
 void UCartographMenuWidget::InitializeHeadings(UPanelWidget* Panel)
@@ -108,7 +108,8 @@ void UCartographMenuWidget::InitializeLayers()
         {
             continue;
         }
-        const FText BuildingName = Cast<AFGBuildable>(BuildableClass->ClassDefaultObject)->mDisplayName;
+
+        const FText BuildingName = GetDefault<AFGBuildable>(BuildableClass->GetClass())->mDisplayName;
 
         FMainCategoryItem* MainCategoryItem = LayerHeading.MainCategories.Find(LayerData->MainCategoryCache);
         if (!MainCategoryItem)

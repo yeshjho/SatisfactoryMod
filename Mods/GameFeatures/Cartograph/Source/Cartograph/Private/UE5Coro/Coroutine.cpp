@@ -1,4 +1,4 @@
-// Copyright © Laura Andelare
+﻿// Copyright © Laura Andelare
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -29,8 +29,11 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "UE5Coro/Coroutine.h"
-#include "Promise.h"
+#include "UE5Coro/UE5Coro/Coroutine.h"
+
+#include <mutex>
+
+#include "UE5Coro/UE5Coro/Promise.h"
 
 
 using namespace UE5Coro;

@@ -1,4 +1,4 @@
-// Copyright © Laura Andelare
+﻿// Copyright © Laura Andelare
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -30,7 +30,7 @@
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "UE5CoroChainCallbackTarget.h"
-#include "UE5Coro/UE5CoroSubsystem.h"
+#include "UE5Coro/UE5Coro/UE5CoroSubsystem.h"
 
 using namespace UE5Coro::Private;
 

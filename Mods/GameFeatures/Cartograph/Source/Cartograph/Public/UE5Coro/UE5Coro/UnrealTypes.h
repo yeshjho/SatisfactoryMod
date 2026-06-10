@@ -1,4 +1,4 @@
-// Copyright © Laura Andelare
+﻿// Copyright © Laura Andelare
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -32,7 +32,7 @@
 #pragma once
 
 // This file will be #included directly in .gen.cpp, so it's treated as external
-#include "UE5Coro.h"
+#include "UE5Coro/UE5Coro.h"
 #include "UnrealTypes.generated.h"
 
 /** USTRUCT wrapper for TCoroutine<>. */

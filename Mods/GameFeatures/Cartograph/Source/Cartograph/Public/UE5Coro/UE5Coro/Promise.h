@@ -1,4 +1,4 @@
-// Copyright © Laura Andelare
+﻿// Copyright © Laura Andelare
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -32,13 +32,13 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "UE5Coro/Definition.h"
+#include "UE5Coro/UE5Coro/Definition.h"
 #include <coroutine>
 #include <functional>
 #include "Engine/LatentActionManager.h"
 #define UE5CORO_PRIVATE_SUPPRESS_COROUTINE_INL
-#include "UE5Coro/Coroutine.h"
-#include "UE5Coro/Private.h"
+#include "UE5Coro/UE5Coro/Coroutine.h"
+#include "UE5Coro/UE5Coro/Private.h"
 
 namespace UE5Coro
 {
@@ -469,5 +469,5 @@ struct std::coroutine_traits<const FVoidCoroutine, Args...>
 	                                               Args...>::promise_type;
 };
 
-#include "UE5Coro/Coroutine.inl"
+#include "UE5Coro/UE5Coro/Coroutine.inl"
 #pragma endregion

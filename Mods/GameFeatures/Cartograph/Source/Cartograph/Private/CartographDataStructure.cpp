@@ -2,13 +2,13 @@
 
 #include "Engine/InheritableComponentHandler.h"
 
-#include "FGBuildable.h"
+#include "Buildables/FGBuildable.h"
 #include "FGBuildableBeam.h"
-#include "FGBuildableWire.h"
+#include "Buildables/FGBuildableWire.h"
 #include "FGSplineBuildableInterface.h"
 
 #include "CartographGameInstanceModule.h"
-#include "QuantizedVector2DSerialization.h"
+#include "Util/QuantizedVector2DSerialization.h"
 
 
 // This is used for actual equality check while removing
@@ -575,7 +575,7 @@ FVector2D FBuildingData::GetBuildingSize(TSubclassOf<AFGBuildable> BuildableClas
 		return *Size;
 	}
 
-	const AFGBuildable* CDO = Cast<AFGBuildable>(BuildableClass->ClassDefaultObject);
+	const auto* CDO = GetDefault<AFGBuildable>(BuildableClass->GetClass());
 	if (!CDO)
 	{
         CARTO_LOG_ERROR("Can't find CDO for %s", *BuildableClass->GetName());

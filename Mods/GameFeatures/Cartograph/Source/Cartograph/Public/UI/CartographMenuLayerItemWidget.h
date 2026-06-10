@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "CoreMinimal.h"
 #include "UI/CartographMenuItemWidget.h"
@@ -39,7 +39,7 @@ private:
 
 protected:
     UPROPERTY(BlueprintReadWrite)
-    UCartographGameInstanceModule* GameInstanceModule;
+    TObjectPtr<UCartographGameInstanceModule> GameInstanceModule;
 
 
     UPROPERTY(BlueprintReadWrite)

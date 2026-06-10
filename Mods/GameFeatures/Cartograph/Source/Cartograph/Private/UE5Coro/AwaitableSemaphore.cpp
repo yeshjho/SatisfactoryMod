@@ -1,4 +1,4 @@
-// Copyright © Laura Andelare
+﻿// Copyright © Laura Andelare
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -29,7 +29,8 @@
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 // ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "UE5Coro/Threading.h"
+#include "UE5Coro/UE5Coro/Promise.h"
+#include "UE5Coro/UE5Coro/Threading.h"
 
 using namespace UE5Coro;
 using namespace UE5Coro::Private;
