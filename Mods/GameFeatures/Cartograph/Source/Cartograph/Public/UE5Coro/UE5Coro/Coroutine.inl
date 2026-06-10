@@ -1,4 +1,4 @@
-// Copyright © Laura Andelare
+﻿// Copyright © Laura Andelare
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -104,14 +104,17 @@ void TCoroutine<>::ContinueWithWeak(Private::TStrongPtr auto Ptr,
 }
 
 template<typename T>
-void TCoroutine<T>::ContinueWith(std::invocable<T> auto Fn)
+template<typename FnT>
+	requires std::invocable<FnT, T>
+void TCoroutine<T>::ContinueWith(FnT Fn)
 {
 	Extras->ContinueWith<T>(std::move(Fn));
 }
 
 template<typename T>
-void TCoroutine<T>::ContinueWithWeak(Private::TStrongPtr auto Ptr,
-                                     std::invocable<T> auto Fn)
+template<Private::TStrongPtr PtrT, typename FnT>
+	requires std::invocable<FnT, T>
+void TCoroutine<T>::ContinueWithWeak(PtrT Ptr, FnT Fn)
 {
 	using FWeak = Private::TWeak<decltype(Ptr)>;
 	ContinueWith([Weak = typename FWeak::weak(std::move(Ptr)),
@@ -124,9 +127,9 @@ void TCoroutine<T>::ContinueWithWeak(Private::TStrongPtr auto Ptr,
 }
 
 template<typename T>
-void TCoroutine<T>::ContinueWithWeak(
-	Private::TStrongPtr auto Ptr,
-	Private::TInvocableWithPtr<decltype(Ptr), T> auto Fn)
+template<Private::TStrongPtr PtrT, typename FnT>
+	requires Private::TInvocableWithPtr<FnT, PtrT, T>
+void TCoroutine<T>::ContinueWithWeak(PtrT Ptr, FnT Fn)
 {
 	using FWeak = Private::TWeak<decltype(Ptr)>;
 	ContinueWith([Weak = typename FWeak::weak(std::move(Ptr)),

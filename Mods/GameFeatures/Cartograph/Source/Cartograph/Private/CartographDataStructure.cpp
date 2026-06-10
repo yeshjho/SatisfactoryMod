@@ -261,7 +261,7 @@ void FBuildingData::AddExtraData(const FFGDynamicStruct& TypeSpecificData)
 }
 
 
-void FBuildingData::FillInCache(TSubclassOf<AFGBuildable> OriginalBuildableClass)
+void FBuildingData::FillInCache(const TSubclassOf<AFGBuildable>& OriginalBuildableClass)
 {
 	DataType = EBuildingDataType::Invalid;
 
@@ -446,7 +446,7 @@ void FBuildingData::FillInCache(TSubclassOf<AFGBuildable> OriginalBuildableClass
 }
 
 
-void FBuildingData::FillInHash(TSubclassOf<AFGBuildable> OriginalBuildableClass)
+void FBuildingData::FillInHash(const TSubclassOf<AFGBuildable>& OriginalBuildableClass)
 {
 	CARTO_LOG_ERROR_RETURN_IF_NULL(UCartographGameInstanceModule::Instance);
 
@@ -465,7 +465,7 @@ void FBuildingData::FillInHash(TSubclassOf<AFGBuildable> OriginalBuildableClass)
 }
 
 
-void FBuildingData::FillInHashAndCache(TSubclassOf<AFGBuildable> BuildableClass)
+void FBuildingData::FillInHashAndCache(const TSubclassOf<AFGBuildable>& BuildableClass)
 {
 	FillInHash(BuildableClass);
 	if (BuildableClassHash != 0)
@@ -482,7 +482,7 @@ void FBuildingData::FillInHashAndCache(TSubclassOf<AFGBuildable> BuildableClass)
 constexpr float BoxExpansionCentimeters = 300;
 
 
-void FBuildingData::FillInVisualBoxCache(TSubclassOf<AFGBuildable> OriginalBuildableClass)
+void FBuildingData::FillInVisualBoxCache(const TSubclassOf<AFGBuildable>& OriginalBuildableClass)
 {
 	VisualBoxCache = FBox2D{ ForceInit };
 
@@ -562,7 +562,7 @@ void FBuildingData::FillInSplineVisualBoxCache()
 }
 
 
-FVector2D FBuildingData::GetBuildingSize(TSubclassOf<AFGBuildable> BuildableClass)
+FVector2D FBuildingData::GetBuildingSize(const TSubclassOf<AFGBuildable>& BuildableClass)
 {
 	if (!UCartographGameInstanceModule::Instance)
 	{

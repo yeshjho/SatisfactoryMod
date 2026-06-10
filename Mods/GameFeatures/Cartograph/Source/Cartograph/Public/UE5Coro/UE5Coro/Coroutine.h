@@ -159,20 +159,24 @@ public:
 	 *  If the coroutine is already complete, it will be called immediately,
 	 *  otherwise it will be called on the same thread where the coroutine
 	 *  completes. */
-	void ContinueWith(std::invocable<T> auto Fn);
+	template<typename FnT>
+		requires std::invocable<FnT, T>
+	void ContinueWith(FnT Fn);
 
 	/** Like ContinueWith, but the provided functor will only be called if the
 	 *  object is still alive at the time of coroutine completion.
 	 *  @param Ptr UObject*, TSharedPtr, or std::shared_ptr */
-	void ContinueWithWeak(Private::TStrongPtr auto Ptr,
-	                      std::invocable<T> auto Fn);
+	template<Private::TStrongPtr PtrT, typename FnT>
+		requires std::invocable<FnT, T>
+	void ContinueWithWeak(PtrT Ptr, FnT Fn);
 
 	/** Convenience overload that also passes the object as the first argument
 	 *  for, e.g., UObject/Slate member function pointers or static methods with
 	 *  a world context.
 	 *  @param Ptr UObject*, TSharedPtr, or std::shared_ptr */
-	void ContinueWithWeak(Private::TStrongPtr auto Ptr,
-	                      Private::TInvocableWithPtr<decltype(Ptr), T> auto Fn);
+	template<Private::TStrongPtr PtrT, typename FnT>
+		requires Private::TInvocableWithPtr<FnT, PtrT, T>
+	void ContinueWithWeak(PtrT Ptr, FnT Fn);
 };
 
 static_assert(sizeof(TCoroutine<>) == sizeof(TCoroutine<FTransform>));

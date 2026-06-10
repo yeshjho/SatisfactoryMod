@@ -98,14 +98,14 @@ struct FBuildingData
 	void AddExtraData(AFGBuildable* Buildable);
 	void AddExtraData(const FFGDynamicStruct& TypeSpecificData);
 
-	void FillInCache(TSubclassOf<AFGBuildable> OriginalBuildableClass);  // Call it after filling in the extra data
-	void FillInHash(TSubclassOf<AFGBuildable> OriginalBuildableClass);  // Call it after filling in the extra data
-	void FillInHashAndCache(TSubclassOf<AFGBuildable> BuildableClass);  // Call it after filling in the extra data
-    void FillInVisualBoxCache(TSubclassOf<AFGBuildable> OriginalBuildableClass);  // Call it after filling in the extra data
+	void FillInCache(const TSubclassOf<AFGBuildable>& OriginalBuildableClass);  // Call it after filling in the extra data
+	void FillInHash(const TSubclassOf<AFGBuildable>& OriginalBuildableClass);  // Call it after filling in the extra data
+	void FillInHashAndCache(const TSubclassOf<AFGBuildable>& BuildableClass);  // Call it after filling in the extra data
+    void FillInVisualBoxCache(const TSubclassOf<AFGBuildable>& OriginalBuildableClass);  // Call it after filling in the extra data
 
     void FillInSplineVisualBoxCache();  // Call it after filling in the extra data & cache
 
-	static FVector2D GetBuildingSize(TSubclassOf<AFGBuildable> BuildableClass);
+	static FVector2D GetBuildingSize(const TSubclassOf<AFGBuildable>& BuildableClass);
 };
 
 

@@ -1391,7 +1391,7 @@ void UCartographGameInstanceModule::GatherBuildables()
 		}
 
 		TSubclassOf<UFGBuildSubCategory> BuildSubCategory;
-		for (const TSubclassOf<UFGCategory> SubCategory : DescriptorInstance->mSubCategories)
+		for (const TSubclassOf<UFGCategory>& SubCategory : DescriptorInstance->mSubCategories)
 		{
             if (!SubCategory)
             {
