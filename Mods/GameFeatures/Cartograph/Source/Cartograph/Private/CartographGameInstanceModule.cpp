@@ -86,9 +86,9 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 
 	for (const auto& [Material, CategoryData] : MaterialBuildCategoryDataOverrideMap)
 	{
-		for (const auto& [_, Recipe] : GetMutableDefault<UFGFactoryCustomizationDescriptor_Material>(Material->GetClass())->GetBuildableMap())
+		for (const auto& [_, Recipe] : GetMutableDefault<UFGFactoryCustomizationDescriptor_Material>(Material)->GetBuildableMap())
 		{
-			TSubclassOf<AFGBuildable> Buildable = GetDefault<UFGBuildingDescriptor>(UFGRecipe::GetDescriptorForRecipe(Recipe)->GetClass())->mBuildableClass;
+			TSubclassOf<AFGBuildable> Buildable = GetDefault<UFGBuildingDescriptor>(UFGRecipe::GetDescriptorForRecipe(Recipe))->mBuildableClass;
 			if (!BuildableBuildCategoryDataOverrideMap.Contains(Buildable.Get()))
 			{
 				BuildableBuildCategoryDataOverrideMap.Add(Buildable.Get(), CategoryData);
@@ -98,9 +98,9 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 
 	for (const auto& [Material, LayerData] : MaterialBuildLayerDataOverrideMap)
 	{
-		for (const auto& [_, Recipe] : GetMutableDefault<UFGFactoryCustomizationDescriptor_Material>(Material->GetClass())->GetBuildableMap())
+		for (const auto& [_, Recipe] : GetMutableDefault<UFGFactoryCustomizationDescriptor_Material>(Material)->GetBuildableMap())
 		{
-			TSubclassOf<AFGBuildable> Buildable = GetDefault<UFGBuildingDescriptor>(UFGRecipe::GetDescriptorForRecipe(Recipe)->GetClass())->mBuildableClass;
+			TSubclassOf<AFGBuildable> Buildable = GetDefault<UFGBuildingDescriptor>(UFGRecipe::GetDescriptorForRecipe(Recipe))->mBuildableClass;
 			if (!BuildableBuildLayerDataOverrideMap.Contains(Buildable.Get()))
 			{
 				BuildableBuildLayerDataOverrideMap.Add(Buildable.Get(), LayerData);
@@ -1382,7 +1382,7 @@ void UCartographGameInstanceModule::GatherBuildables()
 			continue;
 		}
 
-		const auto* DescriptorInstance = GetDefault<UFGBuildingDescriptor>(Descriptor->GetClass());
+		const auto* DescriptorInstance = GetDefault<UFGBuildingDescriptor>(Descriptor);
 		CARTO_LOG_ERROR_DO_IF_NULL(DescriptorInstance, continue);
 		TSubclassOf<AFGBuildable> BuildableClass = DescriptorInstance->mBuildableClass;
 		if (!BuildableClass)

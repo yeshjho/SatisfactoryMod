@@ -109,7 +109,7 @@ void UCartographMenuWidget::InitializeLayers()
             continue;
         }
 
-        const FText BuildingName = GetDefault<AFGBuildable>(BuildableClass->GetClass())->mDisplayName;
+        const FText BuildingName = GetDefault<AFGBuildable>(BuildableClass)->mDisplayName;
 
         FMainCategoryItem* MainCategoryItem = LayerHeading.MainCategories.Find(LayerData->MainCategoryCache);
         if (!MainCategoryItem)

@@ -575,7 +575,7 @@ FVector2D FBuildingData::GetBuildingSize(const TSubclassOf<AFGBuildable>& Builda
 		return *Size;
 	}
 
-	const auto* CDO = GetDefault<AFGBuildable>(BuildableClass->GetClass());
+	const auto* CDO = GetDefault<AFGBuildable>(BuildableClass);
 	if (!CDO)
 	{
         CARTO_LOG_ERROR("Can't find CDO for %s", *BuildableClass->GetName());
