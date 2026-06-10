@@ -16,7 +16,7 @@ class SML_API USubsystemActorManager : public UWorldSubsystem {
 private:
 	/** Map of subsystem class to the actor of the corresponding type. Contains both replicated and spawned subsystems */
 	UPROPERTY()
-	TMap<TSubclassOf<AModSubsystem>, AModSubsystem*> SubsystemActors;
+	TMap<TSubclassOf<AModSubsystem>, TObjectPtr<AModSubsystem>> SubsystemActors;
 
 	/** Array of registered subsystem classes and their corresponding policies, used to verify WaitForSubsystem call */
 	UPROPERTY()
@@ -36,7 +36,7 @@ public:
 
 	/** Waits until provided Modded SubsystemClass is Available and can be retrieved through GetSubsystemActor */
 	UFUNCTION(BlueprintCallable, meta = (Latent, LatentInfo = "LatentInfo"))
-	void WaitForSubsystem(TSubclassOf<AModSubsystem> SubsystemClass, struct FLatentActionInfo& LatentInfo);
+	void WaitForSubsystem(TSubclassOf<AModSubsystem> SubsystemClass, struct FLatentActionInfo LatentInfo);
 	
 	/** Retrieves subsystem actor of the provided class, or NULL if it has not been created or replicated yet */
 	UFUNCTION(BlueprintPure, meta = (DisplayName = "GetSubsystemActor", DeterminesOutputType = "SubsystemClass"))

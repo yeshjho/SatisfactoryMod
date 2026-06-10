@@ -75,7 +75,7 @@ EDataValidationResult UFGSchematic::IsDataValid(FDataValidationContext& validati
 		}
 	}
 
-	if (!mSchematicIcon.IsSet() || !IsValid(mSchematicIcon.GetResourceObject())) {
+	if (mType == ESchematicType::EST_Milestone && (!mSchematicIcon.IsSet() || !IsValid(mSchematicIcon.GetResourceObject()))) {
 		validationContext.AddError(NSLOCTEXT("Schematic", "SchematicValidation_InvalidIcon", "Invalid icon set for schematic. This will cause the milestone to not display its unlocks or cost in the HUB."));
 		ValidationResult = EDataValidationResult::Invalid;
 	}
@@ -85,7 +85,7 @@ EDataValidationResult UFGSchematic::IsDataValid(FDataValidationContext& validati
 #endif
 
 #if WITH_EDITOR
-void UFGSchematic::PreSave(FObjectPreSaveContext saveContext){ }
+void UFGSchematic::PreSave(FObjectPreSaveContext saveContext){ Super::PreSave(saveContext); }
 #endif 
 #if WITH_EDITOR
 void UFGSchematic::UpdateAssetBundleData(){ }
@@ -128,3 +128,5 @@ void UFGSchematic::SortByMenuPriority(TArray< TSubclassOf< UFGSchematic > >& sch
 TArray< EEvents > UFGSchematic::GetRelevantEvents(TSubclassOf< UFGSchematic > inClass){ return TArray<EEvents>(); }
 bool UFGSchematic::IsIncludedInBuild(TSubclassOf< UFGSchematic > inClass){ return bool(); }
 FGameplayTag UFGSchematic::GetSchematicUnlockTag(TSubclassOf< UFGSchematic > inClass){ return FGameplayTag(); }
+bool UFGSchematic::HasGameplayTag(TSubclassOf<UFGSchematic> inClass, const FGameplayTag& inGameplayTag){ return bool(); }
+FGameplayTagContainer UFGSchematic::GetAllGameplayTags(TSubclassOf<UFGSchematic> inClass){ return FGameplayTagContainer(); }

@@ -66,7 +66,9 @@ void AFGHologram::Destroyed(){ Super::Destroyed(); }
 void AFGHologram::SetActorHiddenInGame(bool newHidden){ }
 void AFGHologram::OnNearbyBuildableOverlapBegin( AFGBuildable* buildable){ }
 void AFGHologram::OnNearbyBuildableOverlapEnd( AFGBuildable* buildable){ }
+void AFGHologram::UpdateHologramPlacement(const FHitResult& hitResult){ }
 bool AFGHologram::IsValidHitResult(const FHitResult& hitResult) const{ return bool(); }
+bool AFGHologram::TryZoop(const FHitResult& hitResult){ return bool(); }
 bool AFGHologram::TryUpgrade(const FHitResult& hitResult){ return bool(); }
 void AFGHologram::AdjustForGround(FVector& out_adjustedLocation, FRotator& out_adjustedRotation){ }
 bool AFGHologram::TrySnapToActor(const FHitResult& hitResult){ return bool(); }
@@ -120,6 +122,10 @@ void AFGHologram::SetInsideBlueprintDesigner( AFGBuildableBlueprintDesigner* des
 AFGBuildableBlueprintDesigner* AFGHologram::GetBlueprintDesigner() const{ return nullptr; }
 bool AFGHologram::CanNudgeHologram() const{ return bool(); }
 void AFGHologram::LockHologramPosition(bool lock){ }
+bool AFGHologram::ShouldUnlockHologramOnBuildStep() const
+{
+	return false;
+}
 void AFGHologram::SetNudgeOffset(const FVector& NewNudgeOffset){ }
 ENudgeFailReason AFGHologram::AddNudgeOffset(const FVector& Offset, const FVector& MaxNudgeDistance){ return ENudgeFailReason(); }
 float AFGHologram::GetNudgeDistance() const{ return float(); }
@@ -129,7 +135,9 @@ AFGHologram* AFGHologram::GetNudgeHologramTarget(){ return nullptr; }
 int32 AFGHologram::GetRotationStep() const{ return int32(); }
 void AFGHologram::HideHologram(bool bVisible){ }
 bool AFGHologram::ShouldBuildGunHitWireMeshes() const{ return bool(); }
+bool AFGHologram::ShouldBuildGunHitVehiclePaths() const{ return bool(); }
 void AFGHologram::OnHologramTransformUpdated(){ }
+void AFGHologram::OnHologramLockStateChanged(){ }
 void AFGHologram::InitializeClearanceData(){ }
 void AFGHologram::PostInitializeClearanceData(){ }
 void AFGHologram::SetupClearanceDetector(){ }

@@ -2,6 +2,7 @@
 #include "Command/ChatCommandLibrary.h"
 #include "FGChatManager.h"
 #include "FGPlayerController.h"
+#include "FGGameState.h"
 #include "SatisfactoryModLoader.h"
 #include "Net/UnrealNetwork.h"
 
@@ -29,9 +30,10 @@ void USMLRemoteCallObject::SendChatMessage_Implementation(const FString& Message
 	if (ChatManager) {
 		FChatMessageStruct MessageStruct;
 		MessageStruct.MessageText = FText::FromString(Message);
-		MessageStruct.MessageType = EFGChatMessageType::CMT_SystemMessage;
-		MessageStruct.ServerTimeStamp = GetWorld()->TimeSeconds;
+		MessageStruct.MessageType = EFGChatMessageType::CMT_CustomMessage;
+		MessageStruct.ServerTimeStamp = GetGameState()->GetServerWorldTimeSeconds();
 		MessageStruct.MessageSenderColor = Color;
+		MessageStruct.MessageSender = FText::FromString(TEXT("SYSTEM"));
 		ChatManager->AddChatMessageToReceived(MessageStruct);
 	} else {
 		UE_LOG(LogSatisfactoryModLoader, Error, TEXT("A mod tried to send a chat message before the game's ChatManager was ready! It has been prevented to avoid a crash. The mod developer must fix this by waiting for the chat manager to be valid. The message would have been: %s"), *Message);
