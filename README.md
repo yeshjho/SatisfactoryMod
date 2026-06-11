@@ -6,7 +6,7 @@ A Satisfactory mod that displays the buildings on the map.
 SMR: https://ficsit.app/mod/Cartograph
 
 I use 2 remotes locally for this project, [SML](https://github.com/satisfactorymodding/SatisfactoryModLoader) and this one. You'll see duplicate commits and codes for the SML side in this repository.
-<br>You can jump to [Mods/Cartograph](https://github.com/yeshjho/Cartograph/tree/Cartograph/Mods/Cartograph) directory to see Cartgoraph's codes exclusively.
+<br>You can jump to [Mods/GameFeatures/Cartograph](https://github.com/yeshjho/Cartograph/tree/Cartograph/Mods/GameFeatures/Cartograph) directory to see Cartgoraph's codes exclusively.
 
 ### 👥✅ Multiplayer Tested
 
@@ -15,11 +15,11 @@ I use 2 remotes locally for this project, [SML](https://github.com/satisfactorym
 - Or this GitHub repository
 
 ## 📷 Screenshots
-![Screenshot1](https://github.com/yeshjho/SatisfactoryMod/blob/Cartograph/Mods/Cartograph/Pictures/TempScreenshot1.png?raw=true)
-![Screenshot2](https://github.com/yeshjho/SatisfactoryMod/blob/Cartograph/Mods/Cartograph/Pictures/TempScreenshot2.png?raw=true)
+![Screenshot1](https://github.com/yeshjho/SatisfactoryMod/blob/Cartograph/Mods/GameFeatures/Cartograph/Pictures/TempScreenshot1.png?raw=true)
+![Screenshot2](https://github.com/yeshjho/SatisfactoryMod/blob/Cartograph/Mods/GameFeatures/Cartograph/Pictures/TempScreenshot2.png?raw=true)
 
 ## Credits
-- <img src="https://github.com/yeshjho/SatisfactoryMod/blob/Cartograph/Mods/Cartograph/Assets/work/Cartograph.png?raw=true" width="50"> Mod Icon: **bpforest**
+- <img src="https://github.com/yeshjho/SatisfactoryMod/blob/Cartograph/Mods/GameFeatures/Cartograph/Assets/work/Cartograph.png?raw=true" width="50"> Mod Icon: **bpforest**
 
 ## Special Thanks to
 - [SCIM](https://satisfactory-calculator.com/): Inspiration for this mod! Also referred to its code to figure out the exact map coordinates.
