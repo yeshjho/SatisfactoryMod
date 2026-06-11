@@ -954,20 +954,6 @@ void UCartographGameInstanceModule::OnZFilterUpdated(float Min, float Max)
 #pragma region UI
 void UCartographGameInstanceModule::RegisterMenuButton() const
 {
-	// Copied from WidgetBlueprintHookManager.cpp
-	class UCartographPanelWidgetAccessor : UPanelWidget
-	{
-	public:
-		static UClass* GetPanelSlotClass(const UPanelWidget* PanelWidget) {
-			return static_cast<const UCartographPanelWidgetAccessor*>(PanelWidget)->GetSlotClass();
-		}
-
-		static TArray<TObjectPtr<UPanelSlot>>& GetPanelSlots(UPanelWidget* PanelWidget) {
-			return static_cast<UCartographPanelWidgetAccessor*>(PanelWidget)->Slots;
-		}
-		UCartographPanelWidgetAccessor() = delete;
-	};
-
 	if (!FPlatformProperties::RequiresCookedData() || FPlatformProperties::IsServerOnly()) 
 	{
 		return;
@@ -976,43 +962,43 @@ void UCartographGameInstanceModule::RegisterMenuButton() const
 	const auto* WidgetBlueprintClass = Cast<UWidgetBlueprintGeneratedClass>(MapContainerWidget.LoadSynchronous());
 	UWidgetTree* WidgetTree = WidgetBlueprintClass->GetWidgetTreeArchetype();
 
+	const UWidget* Menu = WidgetTree->FindWidget("BPW_MapMenu");
+	CARTO_LOG_ERROR_RETURN_IF_NULL(Menu);
+	const auto* MenuPanelSlot = Cast<UCanvasPanelSlot>(Menu->Slot);
+	CARTO_LOG_ERROR_RETURN_IF_NULL(MenuPanelSlot);
+
 	UWidget* ShowHideButton = WidgetTree->FindWidget("ShowHideButton");
     CARTO_LOG_ERROR_RETURN_IF_NULL(ShowHideButton);
+
+	// Remove the Show/Hide menu button from its parent, as we'll be replacing that with a hbox
 	int32 Index;
 	UPanelWidget* Parent = UWidgetTree::FindWidgetParent(ShowHideButton, Index);
+	CARTO_LOG_ERROR_RETURN_IF_NULL(Parent);
+	Parent->RemoveChild(ShowHideButton);
 
+	// Create a new hox and add it to the parent, maintaining the original index
     UHorizontalBox* HBox = NewObject<UHorizontalBox>(WidgetTree, UHorizontalBox::StaticClass(), "MenuShowHideButtonHBox", RF_Transient);
-
-    auto* HBoxPanelSlot = NewObject<UCanvasPanelSlot>(Parent, UCanvasPanelSlot::StaticClass(), NAME_None, RF_Transient);
-    HBoxPanelSlot->Content = HBox;
-    HBoxPanelSlot->Parent = Parent;
+	auto* HBoxPanelSlot = Cast<UCanvasPanelSlot>(Parent->InsertChildAt(Index, HBox));
 	HBoxPanelSlot->SetPosition({ 6, 6 });
 	HBoxPanelSlot->SetAutoSize(true);
 
-    HBox->Slot = HBoxPanelSlot;
-
-	//ShowHideButton->RemoveFromParent();  // AddChild already removes from parent
+	// Add the Show/Hide menu button to the hbox
 	HBox->AddChild(ShowHideButton);
 
-	UWidget* CartographMenuShowHideButton = NewObject<UWidget>(HBox, MenuShowHideButtonWidget, "CartographMenuShowHideButton", RF_Transient/*, ShowHideButton*/);
-    auto* HBoxSlot = Cast<UHorizontalBoxSlot>(HBox->AddChild(CartographMenuShowHideButton));
+	// Create Cartograph's Show/Hide menu button and add it to the hbox
+	UWidget* CartographMenuShowHideButton = WidgetTree->ConstructWidget<UWidget>(MenuShowHideButtonWidget, "CartographMenuShowHideButton");
+	auto* HBoxSlot = Cast<UHorizontalBoxSlot>(HBox->AddChild(CartographMenuShowHideButton));
 	HBoxSlot->SetPadding({ 10, 0, 0, 0 });
 
+	// Update the button's text
 	FProperty* TextProperty = CartographMenuShowHideButton->GetClass()->FindPropertyByName("mText");
     CARTO_LOG_ERROR_RETURN_IF_NULL(TextProperty);
 	FText* TextPtr = TextProperty->ContainerPtrToValuePtr<FText>(CartographMenuShowHideButton);
     CARTO_LOG_ERROR_RETURN_IF_NULL(TextPtr);
     *TextPtr = LOCTEXT("CartographMenuShow", "Show Cartograph Menu");
 
-	TArray<TObjectPtr<UPanelSlot>> MutablePanelSlots = UCartographPanelWidgetAccessor::GetPanelSlots(Parent);
-	MutablePanelSlots.Insert(HBoxPanelSlot, Index);
 
-
-	const UWidget* Menu = WidgetTree->FindWidget("BPW_MapMenu");
-    CARTO_LOG_ERROR_RETURN_IF_NULL(Menu);
-	const auto* MenuPanelSlot = Cast<UCanvasPanelSlot>(Menu->Slot);
-    CARTO_LOG_ERROR_RETURN_IF_NULL(MenuPanelSlot);
-
+	// Now create the actual menu
 	UWidget* CartographMenu = NewObject<UWidget>(HBox, MenuWidget, "CartographMenu", RF_Transient);
 	auto* CartographMenuPanelSlot = Cast<UCanvasPanelSlot>(Parent->AddChild(CartographMenu));
     CartographMenuPanelSlot->SetLayout(MenuPanelSlot->GetLayout());
