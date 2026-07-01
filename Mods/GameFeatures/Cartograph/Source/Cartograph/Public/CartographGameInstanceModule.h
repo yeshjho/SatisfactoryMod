@@ -32,10 +32,48 @@ constexpr double SOUTH_BOUND_CENTIMETERS = 375000;
 constexpr double MAP_WIDTH_CENTIMETERS = EAST_BOUND_CENTIMETERS - WEST_BOUND_CENTIMETERS;
 constexpr double MAP_HEIGHT_CENTIMETERS = SOUTH_BOUND_CENTIMETERS - NORTH_BOUND_CENTIMETERS;
 
-constexpr int RENDER_TEXTURE_SIZE = 1024 * 8;
+// Render target resolution (square, in pixels).
+// This used to be a hard-coded 8192 (= 1024 * 8). An 8192x8192 RGBA8 render target is ~256 MB of VRAM
+// (~340 MB with a mip chain), held for the whole session, which starves the texture streaming pool and
+// causes other (vanilla) textures to drop mips and look blurry.
+// It is now driven by the mod config (see GRenderTextureSize / the resolution dropdown).
+//
+// NOTE: building screen-positions are cached at gather time assuming a fixed resolution, so the value is
+// latched once per world load (see UCartographGameInstanceModule::OnWorldLoaded) and must not change while
+// a world is loaded.
+
+// Backs the resolution dropdown in the config menu. The config asset stores the selected option as an
+// integer (CP_Integer with the "Enum" widget type pointed at this enum), so the numeric values matter:
+// keep them 0..3 and contiguous.
+UENUM(BlueprintType)
+enum class ECartographRenderResolution : uint8
+{
+	Res2K = 0 UMETA(DisplayName = "2K  (2048px, ~16 MB)"),
+	Res4K = 1 UMETA(DisplayName = "4K  (4096px, ~64 MB)"),
+	Res6K = 2 UMETA(DisplayName = "6K  (6144px, ~144 MB)"),
+	Res8K = 3 UMETA(DisplayName = "8K  (8192px, ~256 MB)"),
+};
+
+constexpr int DEFAULT_RENDER_TEXTURE_SIZE = 1024 * 4;  // 4096 -> 1/4 the VRAM of the old 8192
+inline int GRenderTextureSize = DEFAULT_RENDER_TEXTURE_SIZE;
+
+inline int RenderResolutionToPixels(ECartographRenderResolution Resolution)
+{
+	switch (Resolution)
+	{
+	case ECartographRenderResolution::Res2K: return 2048;
+	case ECartographRenderResolution::Res4K: return 4096;
+	case ECartographRenderResolution::Res6K: return 6144;
+	case ECartographRenderResolution::Res8K: return 8192;
+	default:                                 return DEFAULT_RENDER_TEXTURE_SIZE;
+	}
+}
 
 constexpr double ORIGIN_UV[] = { -WEST_BOUND_CENTIMETERS / MAP_WIDTH_CENTIMETERS, -NORTH_BOUND_CENTIMETERS / MAP_HEIGHT_CENTIMETERS };
-constexpr double PIXEL_PER_CENTIMETER[] = { RENDER_TEXTURE_SIZE / MAP_WIDTH_CENTIMETERS, RENDER_TEXTURE_SIZE / MAP_HEIGHT_CENTIMETERS };
+
+// Resolution-dependent, so these are functions of the runtime GRenderTextureSize rather than constexpr.
+inline double pixel_per_centimeter_x() { return GRenderTextureSize / MAP_WIDTH_CENTIMETERS; }
+inline double pixel_per_centimeter_y() { return GRenderTextureSize / MAP_HEIGHT_CENTIMETERS; }
 
 constexpr int SPLINE_SEGMENTS = 8;
 
@@ -198,6 +236,13 @@ public:
 
 private:
 	void RedrawMap(bool bRedrawEntirely);
+
+	// Render target VRAM management.
+	// EnsureRenderTargetReady (re)configures the render target to the configured resolution/format and
+	// allocates its GPU resource if needed. ReleaseRenderTargetResource frees the GPU allocation while
+	// keeping the UObject around (so widget/material bindings stay valid) for when the map is reopened.
+	void EnsureRenderTargetReady();
+	void ReleaseRenderTargetResource();
 	UE5Coro::TCoroutine<> InitialBuildableGather(TArray<TWeakObjectPtr<AFGBuildable>> Factories, TMap<TSubclassOf<AFGBuildable>, TArray<FRuntimeBuildableInstanceData>> Buildings, FForceLatentCoroutine = {});
 	UE5Coro::TCoroutine<> RedrawMapCoroutine(TArray<FBuildingData> AddedBuildings, TArray<FBuildingData> RemovedBuildings, bool bRedrawEntirely, FForceLatentCoroutine = {});
 
@@ -235,7 +280,13 @@ private:
 	TArray<FString> GetLayerCategoryOptions() const;
 
 	UFUNCTION(BlueprintCallable)
-	void OnVanillaMapMenuShown(const UUserWidget* Widget) const;
+	void OnVanillaMapMenuShown(const UUserWidget* Widget);
+
+	// Bind this to the map menu widget's hide/destruct event (see install walkthrough). Frees the render
+	// target's VRAM while the map is closed. If it is never bound, the mod still works — the render target
+	// just stays resident at the (reduced) configured resolution instead of being freed between viewings.
+	UFUNCTION(BlueprintCallable)
+	void OnVanillaMapMenuHidden();
 
 
 	template<typename T>
@@ -377,6 +428,16 @@ protected:
 	bool IsInWorld = false;
     bool IsClient = false;
 
+	// True while the player is viewing the map. Gates GPU drawing and render-target allocation so the
+	// render target only consumes VRAM while the map is actually on screen.
+	bool bMapVisible = false;
+
+	// Latched from the mod config at world load (see OnWorldLoaded).
+	// bGenerateMips: generate a mip chain for the render target (~+33% VRAM, but cleaner when zoomed out).
+	// bFreeRenderTargetWhenClosed: free the render target's VRAM whenever the map is closed.
+	bool bGenerateMips = false;
+	bool bFreeRenderTargetWhenClosed = true;
+
 	float MinZFilter = -std::numeric_limits<float>::max();
     float MaxZFilter = std::numeric_limits<float>::max();
 
@@ -433,7 +494,7 @@ FVector2D world_position_to_screen_position(const T& WorldPosition, const U& Siz
 	return FVector2D{
 		ORIGIN_UV[0] + (WorldPosition.X - Size.X / 2) / MAP_WIDTH_CENTIMETERS,
 		ORIGIN_UV[1] + (WorldPosition.Y - Size.Y / 2) / MAP_HEIGHT_CENTIMETERS
-	} * RENDER_TEXTURE_SIZE;
+	} * GRenderTextureSize;
 }
 
 
@@ -441,7 +502,7 @@ template<IsFVector T>
 FVector2D screen_position_to_world_position(const T& ScreenPosition)
 {
     return FVector2D{
-        (ScreenPosition.X / RENDER_TEXTURE_SIZE - ORIGIN_UV[0]) * MAP_WIDTH_CENTIMETERS,
-        (ScreenPosition.Y / RENDER_TEXTURE_SIZE - ORIGIN_UV[1]) * MAP_HEIGHT_CENTIMETERS
+        (ScreenPosition.X / GRenderTextureSize - ORIGIN_UV[0]) * MAP_WIDTH_CENTIMETERS,
+        (ScreenPosition.Y / GRenderTextureSize - ORIGIN_UV[1]) * MAP_HEIGHT_CENTIMETERS
     };
 }
