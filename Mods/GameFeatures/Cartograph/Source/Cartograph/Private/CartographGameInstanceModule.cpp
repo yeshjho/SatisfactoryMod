@@ -323,6 +323,16 @@ void UCartographGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase
 			[](auto& Scope, FCanvas* ClassInstance,
 				FCanvas::EElementType InElementType, FBatchedElementParameters* InBatchedElementParameters, const FTexture* InTexture, ESimpleElementBlendMode InBlendMode, const FDepthFieldGlowInfo& GlowInfo, bool bApplyDPIScale)
 			{
+				// The custom render item is only needed for Cartograph's map canvas,
+				// where it applies the redraw scissor. Let every other canvas use the
+				// engine implementation and its resource lifetime handling.
+				const UCartographGameInstanceModule* Cartograph = UCartographGameInstanceModule::Instance;
+				if (!Cartograph || ClassInstance != Cartograph->CurrentCanvas)
+				{
+					Scope(ClassInstance, InElementType, InBatchedElementParameters, InTexture, InBlendMode, GlowInfo, bApplyDPIScale);
+					return;
+				}
+
 				// get sort element based on the current sort key from top of sort key stack
 				FCanvas::FCanvasSortElement& SortElement = ClassInstance->GetSortElement(ClassInstance->TopDepthSortKey());
 				// find a batch to use 
@@ -896,11 +906,12 @@ void UCartographGameInstanceModule::OnCoroutineFinishedOrCancelled()
 {
     CARTO_LOG_DEBUG("OnCoroutineFinishedOrCancelled");
 
-    if (RenderContext.RenderTarget)
-    {
+	if (RenderContext.RenderTarget)
+	{
         UKismetRenderingLibrary::EndDrawCanvasToRenderTarget(this, RenderContext);
 		RenderContext = {};
-    }
+		CurrentCanvas = nullptr;
+	}
 
 	if (!IsPendingRedraw)
 	{
